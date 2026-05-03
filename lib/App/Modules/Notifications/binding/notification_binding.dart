@@ -1,0 +1,12 @@
+import 'package:get/get.dart';
+import 'package:racharuchi/App/Modules/Notifications/controller/notification_controller.dart';
+
+class NotificationBinding extends Bindings {
+  @override
+  void dependencies() {
+    Get.lazyPut<NotificationController>(
+      () => NotificationController(),
+      fenix: true,
+    );
+  }
+}
