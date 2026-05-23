@@ -33,11 +33,6 @@ class AIFloatingController extends GetxController {
     AIMenuItem(icon: Iconsax.chart, label: 'Nutrition Info', color: 0xFF9C27B0),
   ];
 
-  @override
-  void onInit() {
-    super.onInit();
-    // Initialize any AI services here
-  }
 
   void onPressed() {
     if (isExpanded.value) {
@@ -197,10 +192,6 @@ class AIFloatingController extends GetxController {
     buttonScale.value = hovering ? 1.1 : 1.0;
   }
 
-  @override
-  void onClose() {
-    super.onClose();
-  }
 }
 
 class AIMenuItem {

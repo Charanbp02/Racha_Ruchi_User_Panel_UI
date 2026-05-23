@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:racharuchi/App/Routes/app_routes.dart';
 
 class SignUpController extends GetxController {
   var name = ''.obs;
@@ -11,6 +14,9 @@ class SignUpController extends GetxController {
   var isLoading = false.obs;
   var agreeToTerms = false.obs;
   var errorMessage = ''.obs;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   void togglePasswordVisibility() {
     isPasswordVisible.value = !isPasswordVisible.value;
@@ -69,24 +75,87 @@ class SignUpController extends GetxController {
 
     isLoading.value = true;
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Create user with Firebase
+      UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(
+            email: email.value.trim(),
+            password: password.value,
+          );
 
-    Get.snackbar(
-      'Success',
-      'Account created successfully! Please login.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-    );
+      // Update user profile with name
+      if (userCredential.user != null) {
+        await userCredential.user!.updateDisplayName(name.value);
+        await userCredential.user!.reload();
 
-    // Navigate back to login
-    Get.back();
+        // Save user data to Firestore
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'uid': userCredential.user!.uid,
+          'name': name.value,
+          'email': email.value.trim(),
+          'phone': '',
+          'imageUrl': '',
+          'followersCount': 0,
+          'followingCount': 0,
+          'totalLikes': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
 
-    isLoading.value = false;
+      // Show success message
+      Get.snackbar(
+        'Welcome! 🎉',
+        'Account created successfully!',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+
+      // Navigate directly to home page after a short delay
+      await Future.delayed(const Duration(milliseconds: 1500));
+
+      // Navigate to home page and remove all previous routes
+      Get.offAllNamed(AppRoutes.BOTTOM_BAR);
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'This email is already registered';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address';
+          break;
+        case 'weak-password':
+          message = 'Password is too weak';
+          break;
+        default:
+          message = 'Failed to create account. Please try again.';
+      }
+      errorMessage.value = message;
+      Get.snackbar(
+        'Sign Up Failed',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      errorMessage.value = 'An error occurred. Please try again.';
+      Get.snackbar(
+        'Error',
+        'Failed to create account',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   void login() {
-    Get.back();
+    Get.back(); // Navigate back to login screen
   }
 }

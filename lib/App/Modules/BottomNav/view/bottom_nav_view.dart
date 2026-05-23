@@ -6,9 +6,7 @@ import 'package:racharuchi/App/Modules/BottomNav/controller/bottom_nav_controlle
 import 'package:racharuchi/App/Modules/Home/View/Home_view.dart';
 import 'package:racharuchi/App/Modules/Products/view/products_view.dart';
 import 'package:racharuchi/App/Modules/Profile/view/profile_view.dart';
-import 'package:racharuchi/App/Modules/Shorts/view/shorts_view.dart';
-import 'package:racharuchi/App/Modules/Shorts/binding/shorts_binding.dart';
-import 'package:racharuchi/App/Modules/Upload/view/upload_view.dart';
+import 'package:racharuchi/App/Modules/Upload/view/upload_type_bottom_sheet.dart';
 
 class BottomNavView extends StatelessWidget {
   const BottomNavView({super.key});
@@ -17,11 +15,9 @@ class BottomNavView extends StatelessWidget {
   Widget build(BuildContext context) {
     final BottomNavController controller = Get.put(BottomNavController());
 
-    ShortsBinding().dependencies();
     final pages = [
       const HomeView(),
-      const ShortsView(),
-      const UploadView(),
+      Container(), // Placeholder for Upload
       const ProductsView(),
       const ProfileView(),
     ];
@@ -41,7 +37,14 @@ class BottomNavView extends StatelessWidget {
           ),
           child: BottomNavigationBar(
             currentIndex: controller.selectedIndex.value,
-            onTap: (index) => controller.changeTab(index),
+            onTap: (index) {
+              if (index == 1) {
+                // Show upload type bottom sheet (now at index 1 since Shorts is removed)
+                _showUploadTypeBottomSheet();
+              } else {
+                controller.changeTab(index);
+              }
+            },
             type: BottomNavigationBarType.fixed,
             backgroundColor: Colors.white,
             selectedItemColor: const Color(0xFFE53935),
@@ -54,11 +57,6 @@ class BottomNavView extends StatelessWidget {
                 icon: Icon(IconlyLight.home),
                 activeIcon: Icon(IconlyBold.home),
                 label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(IconlyLight.video),
-                activeIcon: Icon(IconlyBold.video),
-                label: 'Shorts',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Iconsax.gallery_add),
@@ -79,6 +77,15 @@ class BottomNavView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showUploadTypeBottomSheet() {
+    Get.bottomSheet(
+      const UploadTypeBottomSheet(),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      enableDrag: true,
     );
   }
 }

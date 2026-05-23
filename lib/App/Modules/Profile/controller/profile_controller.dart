@@ -1,20 +1,30 @@
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
 
 class ProfileController extends GetxController {
+  // Firebase instances
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final FirebaseStorage _storage;
+
   // User Information
-  var userName = 'Rajesh Kumar'.obs;
-  var userEmail = 'rajesh.kumar@example.com'.obs;
-  var userPhone = '+91 98765 43210'.obs;
-  var userImage = 'https://randomuser.me/api/portraits/men/1.jpg'.obs;
+  var userName = ''.obs;
+  var userEmail = ''.obs;
+  var userPhone = ''.obs;
+  var userImage = ''.obs;
+  var userId = ''.obs;
 
   // Stats
-  var recipes = '24'.obs;
-  var followers = '1.2k'.obs;
-  var following = '345'.obs;
-  var totalLikes = '2.3k'.obs;
+  var recipes = '0'.obs;
+  var followers = '0'.obs;
+  var following = '0'.obs;
+  var totalLikes = '0'.obs;
 
   // UI States
   var isLoading = false.obs;
@@ -36,14 +46,77 @@ class ProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Initialize Firebase Storage
+    _storage = FirebaseStorage.instance;
     fetchUserData();
+    fetchUserStats();
   }
 
   void fetchUserData() async {
-    isLoading.value = true;
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-    isLoading.value = false;
+    try {
+      isLoading.value = true;
+
+      final User? currentUser = _auth.currentUser;
+
+      if (currentUser != null) {
+        userId.value = currentUser.uid;
+        userEmail.value = currentUser.email ?? '';
+        userName.value = currentUser.displayName ?? '';
+        userImage.value = currentUser.photoURL ?? '';
+
+        // Fetch additional user data from Firestore
+        DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(currentUser.uid).get();
+
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          userName.value = userData['name'] ?? currentUser.displayName ?? '';
+          userPhone.value = userData['phone'] ?? '';
+          if (userData['imageUrl'] != null && userData['imageUrl'] != '') {
+            userImage.value = userData['imageUrl'];
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching user data: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to load profile data',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  void fetchUserStats() async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser == null) return;
+
+      // Fetch user's recipes count
+      QuerySnapshot recipesSnapshot =
+          await _firestore
+              .collection('recipes')
+              .where('userId', isEqualTo: currentUser.uid)
+              .get();
+      recipes.value = recipesSnapshot.docs.length.toString();
+
+      // Fetch followers count
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(currentUser.uid).get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        followers.value = (userData['followersCount'] ?? 0).toString();
+        following.value = (userData['followingCount'] ?? 0).toString();
+        totalLikes.value = (userData['totalLikes'] ?? 0).toString();
+      }
+    } catch (e) {
+      print('Error fetching user stats: $e');
+    }
   }
 
   void toggleEditMode() {
@@ -55,18 +128,44 @@ class ProfileController extends GetxController {
   }
 
   void saveProfile() async {
-    isLoading.value = true;
-    // Simulate saving to API
-    await Future.delayed(const Duration(seconds: 1));
-    isLoading.value = false;
+    try {
+      isLoading.value = true;
 
-    Get.snackbar(
-      'Success',
-      'Profile updated successfully',
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-      snackPosition: SnackPosition.BOTTOM,
-    );
+      final User? currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('User not logged in');
+
+      // Update Firebase Auth profile
+      await currentUser.updateDisplayName(userName.value);
+      await currentUser.reload();
+
+      // Update Firestore
+      await _firestore.collection('users').doc(currentUser.uid).set({
+        'name': userName.value,
+        'email': userEmail.value,
+        'phone': userPhone.value,
+        'imageUrl': userImage.value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      Get.snackbar(
+        'Success',
+        'Profile updated successfully',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      print('Error saving profile: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to update profile',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   void editField(String fieldName, String currentValue) {
@@ -87,7 +186,7 @@ class ProfileController extends GetxController {
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               String newValue = textController.text.trim();
               if (newValue.isNotEmpty) {
                 switch (fieldName) {
@@ -101,14 +200,10 @@ class ProfileController extends GetxController {
                     userPhone.value = newValue;
                     break;
                 }
+
+                // Save immediately to Firebase
+                saveProfile();
                 Get.back();
-                Get.snackbar(
-                  'Updated',
-                  '$fieldName updated successfully',
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: Colors.green,
-                  colorText: Colors.white,
-                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -121,48 +216,102 @@ class ProfileController extends GetxController {
     );
   }
 
-  void updateProfileImage(String imageUrl) {
-    userImage.value = imageUrl;
-    Get.snackbar(
-      'Success',
-      'Profile picture updated',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-    );
-  }
+  Future<void> updateProfileImage(String imageUrl) async {
+    try {
+      isLoading.value = true;
 
-  Future<void> pickImageFromGallery() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      final User? currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('User not logged in');
 
-    if (image != null) {
+      // Update Firestore with new image URL
+      await _firestore.collection('users').doc(currentUser.uid).update({
+        'imageUrl': imageUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      userImage.value = imageUrl;
+
       Get.snackbar(
         'Success',
-        'Image selected from gallery',
+        'Profile picture updated',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
-      // Update with local path or upload URL
-      // userImage.value = image.path;
+    } catch (e) {
+      print('Error updating profile image: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to update profile picture',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> pickImageFromGallery() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        // Upload image to Firebase Storage
+        String imageUrl = await uploadImageToStorage(image);
+        await updateProfileImage(imageUrl);
+      }
+    } catch (e) {
+      print('Error picking image from gallery: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to pick image from gallery',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 
   Future<void> pickImageFromCamera() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.camera);
 
-    if (image != null) {
+      if (image != null) {
+        // Upload image to Firebase Storage
+        String imageUrl = await uploadImageToStorage(image);
+        await updateProfileImage(imageUrl);
+      }
+    } catch (e) {
+      print('Error picking image from camera: $e');
       Get.snackbar(
-        'Success',
-        'Image captured from camera',
+        'Error',
+        'Failed to capture image from camera',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.red,
         colorText: Colors.white,
       );
-      // Update with local path or upload URL
-      // userImage.value = image.path;
+    }
+  }
+
+  Future<String> uploadImageToStorage(XFile image) async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('User not logged in');
+
+      String fileName =
+          'profile_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      Reference ref = _storage.ref().child('profile_images/$fileName');
+
+      await ref.putFile(File(image.path));
+      String downloadUrl = await ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      print('Error uploading image: $e');
+      throw Exception('Failed to upload image');
     }
   }
 
@@ -186,8 +335,27 @@ class ProfileController extends GetxController {
     }
   }
 
-  void logout() {
-    // Clear user data
-    Get.offAllNamed('/login');
+  void logout() async {
+    try {
+      await _auth.signOut();
+      // Clear user data
+      userName.value = '';
+      userEmail.value = '';
+      userPhone.value = '';
+      userImage.value = '';
+      userId.value = '';
+
+      // Navigate to login screen
+      Get.offAllNamed('/login');
+    } catch (e) {
+      print('Error logging out: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to logout',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }

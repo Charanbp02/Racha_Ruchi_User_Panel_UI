@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class HeroBannerController extends GetxController {
   // Observable variables
@@ -6,41 +7,62 @@ class HeroBannerController extends GetxController {
   var currentIndex = 0.obs;
   var isLoading = false.obs;
 
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   @override
   void onInit() {
     super.onInit();
     fetchBanners();
   }
 
-  void fetchBanners() {
-    isLoading.value = true;
+  // Fetch banners from Firestore
+  Future<void> fetchBanners() async {
+    try {
+      isLoading.value = true;
 
-    // Add your banner data here - replace with actual data source
-    banners.value = [
-      BannerItem(
-        imageUrl:
-            'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
-        title: 'Special Offer',
-        subtitle: 'Get 50% off on first order',
-        badge: 'LIMITED TIME',
-      ),
-      BannerItem(
-        imageUrl:
-            'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800',
-        title: 'Free Delivery',
-        subtitle: 'On orders above ₹499',
-        badge: 'FREE DELIVERY',
-      ),
-      BannerItem(
-        imageUrl:
-            'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800',
-        title: 'Weekend Special',
-        subtitle: 'Buy 1 Get 1 Free',
-        badge: 'BOGO',
-      ),
-    ];
+      final QuerySnapshot bannerSnapshot =
+          await _firestore
+              .collection('banners')
+              .where('isActive', isEqualTo: true) // Only active banners
+              .orderBy('order')
+              .get();
 
-    isLoading.value = false;
+      banners.value =
+          bannerSnapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return BannerItem(
+              id: doc.id,
+              imageUrl: data['imageUrl'] ?? '',
+              title: data['title'] ?? '',
+              subtitle: data['description'] ?? '',
+              badge: _getBadgeText(data['type']),
+              type: data['type'] ?? 'home',
+              order: data['order'] ?? 0,
+              link: data['link'],
+            );
+          }).toList();
+
+      isLoading.value = false;
+    } catch (e) {
+      print('Error fetching banners: $e');
+      isLoading.value = false;
+    }
+  }
+
+  // Get badge text based on banner type
+  String _getBadgeText(String type) {
+    switch (type) {
+      case 'offer':
+        return 'SPECIAL OFFER';
+      case 'promo':
+        return 'PROMOTION';
+      case 'category':
+        return 'NEW ARRIVAL';
+      case 'home':
+        return 'FEATURED';
+      default:
+        return 'LIMITED TIME';
+    }
   }
 
   void onPageChanged(int index) {
@@ -48,22 +70,56 @@ class HeroBannerController extends GetxController {
   }
 
   void onBannerTap(int index) {
-    print('Banner tapped: ${banners[index].title}');
-    // Add navigation logic here
+    final banner = banners[index];
+    print('Banner tapped: ${banner.title}');
+
+    // Navigate based on banner type or link
+    if (banner.link != null && banner.link!.isNotEmpty) {
+      // Open link in web view or navigate to route
+      Get.toNamed(banner.link!);
+    } else {
+      // Default navigation based on type
+      switch (banner.type) {
+        case 'offer':
+          Get.toNamed('/offers');
+          break;
+        case 'promo':
+          Get.toNamed('/promotions');
+          break;
+        case 'category':
+          Get.toNamed('/categories');
+          break;
+        default:
+          Get.toNamed('/products');
+      }
+    }
+  }
+
+  // Refresh banners (call when app comes to foreground)
+  Future<void> refreshBanners() async {
+    await fetchBanners();
   }
 }
 
-// BannerItem Model
+// BannerItem Model (Updated)
 class BannerItem {
+  final String id;
   final String imageUrl;
   final String title;
   final String subtitle;
   final String badge;
+  final String type;
+  final int order;
+  final String? link;
 
   BannerItem({
+    required this.id,
     required this.imageUrl,
     required this.title,
     required this.subtitle,
     required this.badge,
+    required this.type,
+    required this.order,
+    this.link,
   });
 }

@@ -3,6 +3,8 @@ import 'package:racharuchi/App/Modules/AIFloatingButton/binding/ai_floating_bind
 import 'package:racharuchi/App/Modules/AIFloatingButton/view/ai_floating_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/binding/address_binding.dart';
 import 'package:racharuchi/App/Modules/AddressBook/view/address_view.dart';
+import 'package:racharuchi/App/Modules/All_Videos/binding/videos_binding.dart';
+import 'package:racharuchi/App/Modules/All_Videos/view/videos_view.dart';
 import 'package:racharuchi/App/Modules/Auth/binding/auth_binding.dart';
 import 'package:racharuchi/App/Modules/Auth/view/login_view.dart';
 import 'package:racharuchi/App/Modules/Auth/view/signup_view.dart';
@@ -26,25 +28,18 @@ import 'package:racharuchi/App/Modules/My_Recipes/binding/my_recipes_binding.dar
 import 'package:racharuchi/App/Modules/My_Recipes/view/my_recipes_view.dart';
 import 'package:racharuchi/App/Modules/Notifications/binding/notification_binding.dart';
 import 'package:racharuchi/App/Modules/Notifications/view/notification_view.dart';
-import 'package:racharuchi/App/Modules/Popular_Recipes/binding/popular_recipes_binding.dart';
-import 'package:racharuchi/App/Modules/Popular_Recipes/view/popular_recipes_view.dart';
 import 'package:racharuchi/App/Modules/Products/binding/products_binding.dart';
 import 'package:racharuchi/App/Modules/Products/view/products_view.dart';
 import 'package:racharuchi/App/Modules/Profile/binding/profile_binding.dart';
 import 'package:racharuchi/App/Modules/Profile/view/profile_view.dart';
 import 'package:racharuchi/App/Modules/Search/binding/search_binding.dart';
 import 'package:racharuchi/App/Modules/Search/view/search_bar_view.dart';
-import 'package:racharuchi/App/Modules/Shorts/binding/shorts_binding.dart';
-import 'package:racharuchi/App/Modules/Shorts/view/shorts_view.dart';
 import 'package:racharuchi/App/Modules/Social/binding/social_binding.dart';
 import 'package:racharuchi/App/Modules/Social/view/social_view.dart';
 import 'package:racharuchi/App/Modules/Splash/binding/splash_binding.dart';
 import 'package:racharuchi/App/Modules/Splash/view/splash_view.dart';
 import 'package:racharuchi/App/Modules/Stats/binding/stats_binding.dart';
 import 'package:racharuchi/App/Modules/Stats/view/stats_view.dart';
-import 'package:racharuchi/App/Modules/Top_Recipe_Video/binding/top_recipes_binding.dart';
-import 'package:racharuchi/App/Modules/Top_Recipe_Video/view/top_recipes_full_page.dart';
-import 'package:racharuchi/App/Modules/Top_Recipe_Video/view/top_recipes_view.dart';
 import 'package:racharuchi/App/Modules/Upload/binding/upload_binding.dart';
 import 'package:racharuchi/App/Modules/Upload/view/upload_view.dart';
 import 'package:racharuchi/App/Modules/VideoPlayer/binding/video_player_binding.dart';
@@ -70,21 +65,7 @@ class AppPages {
       page: () => const HeroBannerView(),
       binding: HeroBannerBinding(),
     ),
-    GetPage(
-      name: Routes.TOP_RECIPE_VIDEO,
-      page: () => const TopRecipeVideosFullPage(),
-      binding: TopRecipeVideosBinding(),
-    ),
-    GetPage(
-      name: Routes.POPULAR_RECIPES,
-      page: () => const PopularRecipesSection(),
-      binding: PopularRecipesBinding(),
-    ),
-    GetPage(
-      name: Routes.POPULAR_RECIPES,
-      page: () => const PopularRecipesSection(),
-      binding: PopularRecipesBinding(),
-    ),
+
     GetPage(
       name: Routes.BOTTOM_BAR,
       page: () => const BottomNavView(),
@@ -94,11 +75,6 @@ class AppPages {
       name: Routes.SEARCH,
       page: () => const SearchBarView(),
       binding: SearchBinding(),
-    ),
-    GetPage(
-      name: Routes.SHORTS,
-      page: () => const ShortsView(),
-      binding: ShortsBinding(),
     ),
     GetPage(
       name: Routes.UPLOAD,
@@ -185,6 +161,10 @@ class AppPages {
       page: () => const AIFloatingView(),
       binding: AIFloatingBinding(),
     ),
-    
+    GetPage(
+      name: Routes.ALL_VIDEOS,
+      page: () => VideosView(),
+      binding: VideosBinding(),
+    ),
   ];
 }

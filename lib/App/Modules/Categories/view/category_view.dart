@@ -9,8 +9,30 @@ class CategorySectionView extends StatelessWidget {
   Widget build(BuildContext context) {
     final CategoryController controller = Get.put(CategoryController());
 
-    return Obx(
-      () => SizedBox(
+    return Obx(() {
+      if (controller.isLoading.value) {
+        return SizedBox(
+          height: 50,
+          child: Center(
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFFE53935),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (controller.categories.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      return SizedBox(
         height: 50,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
@@ -78,7 +100,7 @@ class CategorySectionView extends StatelessWidget {
             );
           },
         ),
-      ),
-    );
+      );
+    });
   }
 }

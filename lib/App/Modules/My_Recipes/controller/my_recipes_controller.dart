@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:racharuchi/App/Models/My_Recipe_Model/recipe_model.dart';
 
 class MyRecipesController extends GetxController {
@@ -8,121 +11,130 @@ class MyRecipesController extends GetxController {
   var isLoading = false.obs;
   var selectedFilter = 'All'.obs;
   var searchQuery = ''.obs;
+  var isAuthenticated = false.obs;
 
-  final List<String> filterOptions = ['All', 'Published', 'Draft', 'Private'];
+  final List<String> filterOptions = ['All', 'Published', 'Draft'];
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  StreamSubscription<QuerySnapshot>? _recipesSubscription;
+  StreamSubscription<User?>? _authSubscription;
 
   @override
   void onInit() {
     super.onInit();
-    loadMyRecipes();
+    _setupAuthListener();
+  }
+
+  @override
+  void onClose() {
+    _recipesSubscription?.cancel();
+    _authSubscription?.cancel();
+    super.onClose();
+  }
+
+  void _setupAuthListener() {
+    _authSubscription = _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        isAuthenticated.value = true;
+        loadMyRecipes();
+      } else {
+        isAuthenticated.value = false;
+        myRecipes.clear();
+        filteredRecipes.clear();
+        isLoading.value = false;
+      }
+    });
   }
 
   void loadMyRecipes() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      isLoading.value = false;
+      myRecipes.clear();
+      filteredRecipes.clear();
+      return;
+    }
+
     isLoading.value = true;
 
-    // Simulate API call
-    Future.delayed(const Duration(milliseconds: 500), () {
-      myRecipes.value = [
-        RecipeModel(
-          id: '1',
-          title: 'Chicken Biryani',
-          description: 'Hyderabadi Dum Biryani with aromatic spices',
-          imageUrl:
-              'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d',
-          cookingTime: '45 min',
-          servings: '4-6',
-          difficulty: 'Medium',
-          likes: '1,234',
-          comments: '89',
-          status: 'Published',
-          createdAt: '2024-03-15',
-          cuisine: 'Indian',
-          category: 'Non-Veg',
-        ),
-        RecipeModel(
-          id: '2',
-          title: 'Paneer Butter Masala',
-          description: 'Creamy restaurant style paneer curry',
-          imageUrl:
-              'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8',
-          cookingTime: '30 min',
-          servings: '4',
-          difficulty: 'Easy',
-          likes: '2,345',
-          comments: '156',
-          status: 'Published',
-          createdAt: '2024-03-10',
-          cuisine: 'North Indian',
-          category: 'Veg',
-        ),
-        RecipeModel(
-          id: '3',
-          title: 'Masala Dosa',
-          description: 'Crispy dosa with potato masala filling',
-          imageUrl:
-              'https://images.unsplash.com/photo-1589301760014-3b6c3c3f5f5c',
-          cookingTime: '20 min',
-          servings: '2-3',
-          difficulty: 'Medium',
-          likes: '3,456',
-          comments: '234',
-          status: 'Published',
-          createdAt: '2024-03-05',
-          cuisine: 'South Indian',
-          category: 'Veg',
-        ),
-        RecipeModel(
-          id: '4',
-          title: 'Butter Chicken',
-          description: 'Famous Punjabi butter chicken recipe',
-          imageUrl:
-              'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398',
-          cookingTime: '50 min',
-          servings: '4-5',
-          difficulty: 'Hard',
-          likes: '4,567',
-          comments: '345',
-          status: 'Published',
-          createdAt: '2024-02-28',
-          cuisine: 'North Indian',
-          category: 'Non-Veg',
-        ),
-        RecipeModel(
-          id: '5',
-          title: 'Garlic Naan',
-          description: 'Soft and fluffy garlic naan bread',
-          imageUrl:
-              'https://images.unsplash.com/photo-1604135307499-6a4f9e2b11a0',
-          cookingTime: '15 min',
-          servings: '4',
-          difficulty: 'Easy',
-          likes: '567',
-          comments: '45',
-          status: 'Draft',
-          createdAt: '2024-03-12',
-          cuisine: 'Indian',
-          category: 'Veg',
-        ),
-        RecipeModel(
-          id: '6',
-          title: 'Gulab Jamun',
-          description: 'Soft and juicy Indian dessert',
-          imageUrl:
-              'https://images.unsplash.com/photo-1589301760014-3b6c3c3f5f5c',
-          cookingTime: '25 min',
-          servings: '6',
-          difficulty: 'Medium',
-          likes: '6,789',
-          comments: '567',
-          status: 'Published',
-          createdAt: '2024-02-20',
-          cuisine: 'Indian',
-          category: 'Dessert',
-        ),
-      ];
-      applyFilters();
+    try {
+      // Cancel existing subscription
+      _recipesSubscription?.cancel();
+
+      // Real-time listener for user's recipe videos
+      _recipesSubscription = _firestore
+          .collection('recipe_videos')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final List<RecipeModel> recipes = [];
+
+              for (var doc in snapshot.docs) {
+                final data = doc.data();
+                try {
+                  final recipe = RecipeModel(
+                    id: doc.id,
+                    title: data['title'] ?? 'Untitled Recipe',
+                    description: data['description'] ?? '',
+                    imageUrl: data['thumbnailUrl'] ?? data['imageUrl'] ?? '',
+                    cookingTime: data['duration'] ?? '30 min',
+                    servings: '4-6',
+                    difficulty: 'Medium',
+                    likes: (data['likes'] ?? 0).toString(),
+                    comments: (data['comments'] ?? 0).toString(),
+                    status: data['isActive'] == true ? 'Published' : 'Draft',
+                    createdAt:
+                        data['createdAt'] != null
+                            ? (data['createdAt'] as Timestamp)
+                                .toDate()
+                                .toString()
+                                .split(' ')[0]
+                            : DateTime.now().toString().split(' ')[0],
+                    cuisine: data['category'] ?? 'Indian',
+                    category: data['category'] ?? 'Veg',
+                    userId: data['userId'] ?? '',
+                    videoUrl: data['videoUrl'] ?? '',
+                    tags: List<String>.from(data['tags'] ?? []),
+                    ingredients: List<Map<String, String>>.from(
+                      data['ingredients'] ?? [],
+                    ),
+                    likesCount: data['likes'] ?? 0,
+                    commentsCount: data['comments'] ?? 0,
+                    viewsCount: data['views'] ?? 0,
+                    updatedAt:
+                        data['updatedAt'] != null
+                            ? (data['updatedAt'] as Timestamp).toDate()
+                            : DateTime.now(),
+                    isActive: data['isActive'] ?? true,
+                    isFavorite: data['isFavorite'] ?? false,
+                  );
+                  recipes.add(recipe);
+                } catch (e) {
+                  print('Error parsing recipe ${doc.id}: $e');
+                }
+              }
+
+              myRecipes.value = recipes;
+              applyFilters();
+              isLoading.value = false;
+
+              print('📱 Loaded ${recipes.length} videos for user ${user.uid}');
+            },
+            onError: (error) {
+              print('Error loading recipes: $error');
+              isLoading.value = false;
+              _showErrorSnackbar('Failed to load recipes');
+            },
+          );
+    } catch (e) {
+      print('Error setting up listener: $e');
       isLoading.value = false;
-    });
+      _showErrorSnackbar('Failed to load recipes');
+    }
   }
 
   void applyFilters() {
@@ -175,21 +187,35 @@ class MyRecipesController extends GetxController {
       AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Delete Recipe'),
-        content: const Text('Are you sure you want to delete this recipe?'),
+        content: const Text(
+          'Are you sure you want to delete this recipe video?',
+        ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
-              myRecipes.removeWhere((recipe) => recipe.id == id);
-              applyFilters();
+            onPressed: () async {
               Get.back();
-              Get.snackbar(
-                'Deleted',
-                'Recipe deleted successfully',
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.green,
-                colorText: Colors.white,
-              );
+
+              try {
+                // Delete from Firestore
+                await _firestore.collection('recipe_videos').doc(id).delete();
+
+                Get.snackbar(
+                  'Deleted',
+                  'Recipe video deleted successfully',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.green,
+                  colorText: Colors.white,
+                );
+              } catch (e) {
+                Get.snackbar(
+                  'Error',
+                  'Failed to delete recipe video',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -209,11 +235,36 @@ class MyRecipesController extends GetxController {
   }
 
   void viewRecipe(RecipeModel recipe) {
+    _incrementViewCount(recipe.id);
     Get.toNamed('/recipe-detail', arguments: recipe);
   }
 
   void addNewRecipe() {
     Get.toNamed('/add-recipe');
   }
-}
 
+  Future<void> _incrementViewCount(String id) async {
+    try {
+      await _firestore.collection('recipe_videos').doc(id).update({
+        'views': FieldValue.increment(1),
+      });
+    } catch (e) {
+      print('Error incrementing views: $e');
+    }
+  }
+
+  Future<void> refreshData() async {
+    loadMyRecipes();
+  }
+
+  void _showErrorSnackbar(String message) {
+    Get.snackbar(
+      'Error',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
+  }
+}

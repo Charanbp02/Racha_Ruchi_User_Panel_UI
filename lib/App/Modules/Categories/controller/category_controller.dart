@@ -1,47 +1,67 @@
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CategoryController extends GetxController {
-  var categories =
-      [
-        // Veg Categories
-        {'name': 'Pure Veg', 'icon': '🌱'},
-        {'name': 'Vegetarian Specials', 'icon': '🥗'},
-        {'name': 'Veg Delights', 'icon': '🥕'},
-        {'name': 'Green Kitchen', 'icon': '🥬'},
-        {'name': 'Garden Fresh', 'icon': '🌿'},
-        {'name': 'Veggie Paradise', 'icon': '🍅'},
-        {'name': 'Healthy Veg', 'icon': '🥑'},
-        {'name': 'Satvik Foods', 'icon': '🍚'},
-        {'name': 'Plant-Based Picks', 'icon': '🌾'},
-        {'name': 'Veg Feast', 'icon': '🍛'},
-        {'name': 'Fresh Veg Menu', 'icon': '🥒'},
-        {'name': 'Homestyle Veg', 'icon': '🍲'},
-        {'name': 'Veg Treats', 'icon': '🍠'},
-        {'name': 'Classic Veg Dishes', 'icon': '🍆'},
-        {'name': 'Indian Veg Specials', 'icon': '🇮🇳'},
-
-        // Non-Veg Categories
-        {'name': 'Non-Veg Specials', 'icon': '🍗'},
-        {'name': 'Meat Lovers', 'icon': '🥩'},
-        {'name': 'Chicken Corner', 'icon': '🍗'},
-        {'name': 'Mutton Delights', 'icon': '🍖'},
-        {'name': 'Seafood Specials', 'icon': '🦐'},
-        {'name': 'Protein Feast', 'icon': '🍳'},
-        {'name': 'Non-Veg Treats', 'icon': '🍖'},
-        {'name': 'Grill & BBQ', 'icon': '🔥'},
-        {'name': 'Spicy Non-Veg', 'icon': '🌶️'},
-        {'name': 'Royal Non-Veg', 'icon': '👑'},
-        {'name': 'Non-Veg Combo Meals', 'icon': '🍱'},
-        {'name': 'Street Style Non-Veg', 'icon': '🍢'},
-        {'name': 'Exotic Meats', 'icon': '🐑'},
-        {'name': 'Chef\'s Non-Veg Picks', 'icon': '👨‍🍳'},
-        {'name': 'Tandoori Specials', 'icon': '🔥'},
-      ].obs;
-
+  var categories = <Map<String, dynamic>>[].obs;
+  var isLoading = false.obs;
   var selectedIndex = 0.obs;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  @override
+  void onInit() {
+    super.onInit();
+    fetchCategories();
+  }
+
+  // Fetch categories from Firestore
+  Future<void> fetchCategories() async {
+    try {
+      isLoading.value = true;
+
+      final QuerySnapshot categorySnapshot =
+          await _firestore
+              .collection('categories')
+              .where('isActive', isEqualTo: true)
+              .orderBy('createdAt')
+              .get();
+
+      categories.value =
+          categorySnapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'id': doc.id,
+              'name': data['name'] ?? '',
+              'icon': data['icon'] ?? '🍽️',
+              'isActive': data['isActive'] ?? true,
+              'imageUrl': data['imageUrl'],
+            };
+          }).toList();
+
+      print('✅ Loaded ${categories.length} categories for user app');
+    } catch (e) {
+      print('Error fetching categories: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
 
   void selectCategory(int index) {
     selectedIndex.value = index;
-    print('Selected: ${categories[index]['name']}');
+    final selected = categories[index];
+    print('Selected: ${selected['name']}');
+
+    // Navigate to category products page
+    Get.toNamed(
+      '/category-products',
+      arguments: {
+        'categoryId': selected['id'],
+        'categoryName': selected['name'],
+      },
+    );
+  }
+
+  Future<void> refreshCategories() async {
+    await fetchCategories();
   }
 }

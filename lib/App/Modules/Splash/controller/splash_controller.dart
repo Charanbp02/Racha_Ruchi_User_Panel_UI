@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 import 'package:racharuchi/App/Routes/app_routes.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SplashController extends GetxController {
   /// Logo Animations
@@ -34,6 +35,9 @@ class SplashController extends GetxController {
   Timer? loaderTimer1;
   Timer? loaderTimer2;
   Timer? bubbleAnimationTimer;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _isNavigationTriggered = false;
 
   @override
   void onInit() {
@@ -109,21 +113,55 @@ class SplashController extends GetxController {
     /// Step 7: Start Bubble Animation
     animateBubbles();
 
-    /// Step 8: Navigate
+    /// Step 8: Check auth state and navigate after delay
     await Future.delayed(const Duration(seconds: 3));
+
+    // Check if navigation hasn't been triggered yet
+    if (!_isNavigationTriggered && Get.context != null) {
+      await checkAndNavigate();
+    }
+  }
+
+  Future<void> checkAndNavigate() async {
+    if (_isNavigationTriggered) return;
+    _isNavigationTriggered = true;
 
     // Cancel all timers before navigation
     cancelAllTimers();
 
     if (Get.context != null) {
-      Get.offAllNamed(AppRoutes.BOTTOM_BAR);
+      // Check if user is already logged in
+      User? user = _auth.currentUser;
+
+      // Check if token is still valid (optional but recommended)
+      if (user != null) {
+        try {
+          // Force refresh token to check if it's still valid
+          await user.getIdToken(true);
+          // User is logged in, go directly to home
+          if (Get.context != null) {
+            Get.offAllNamed(AppRoutes.BOTTOM_BAR);
+          }
+        } catch (e) {
+          // Token expired or invalid, sign out and go to login
+          await _auth.signOut();
+          if (Get.context != null) {
+            Get.offAllNamed(AppRoutes.LOGIN);
+          }
+        }
+      } else {
+        // User not logged in, go to login
+        if (Get.context != null) {
+          Get.offAllNamed(AppRoutes.LOGIN);
+        }
+      }
     }
   }
 
   void startLoaderAnimation() {
     // Timer for dot indicator animation
     loaderTimer1 = Timer.periodic(const Duration(milliseconds: 400), (timer) {
-      if (Get.context != null) {
+      if (Get.context != null && !_isNavigationTriggered) {
         dotIndex.value = (dotIndex.value + 1) % 3;
       } else {
         timer.cancel();
@@ -132,7 +170,7 @@ class SplashController extends GetxController {
 
     // Timer for progress indicator
     loaderTimer2 = Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (Get.context != null) {
+      if (Get.context != null && !_isNavigationTriggered) {
         if (dotProgress.value < 1) {
           dotProgress.value += 0.01;
         } else {
@@ -164,7 +202,7 @@ class SplashController extends GetxController {
     bubbleAnimationTimer = Timer.periodic(const Duration(milliseconds: 50), (
       timer,
     ) {
-      if (Get.context != null) {
+      if (Get.context != null && !_isNavigationTriggered) {
         for (var bubble in floatingBubbles) {
           bubble.y -= bubble.speed;
           if (bubble.y < -bubble.size) {

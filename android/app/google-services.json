@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "202293837472",
+    "firebase_url": "https://racharuchi-02-default-rtdb.firebaseio.com",
+    "project_id": "racharuchi-02",
+    "storage_bucket": "racharuchi-02.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202293837472:android:d0259f4c4bab24695a93c5",
+        "android_client_info": {
+          "package_name": "com.example.racharuchi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "202293837472-u6bsreek78k560q23danhu7kho93i220.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.racharuchi",
+            "certificate_hash": "beedb0844875d68573bafd1243692c9a1ee73cde"
+          }
+        },
+        {
+          "client_id": "202293837472-b9fn5t6het5g4hc0p4h4541o2d1hkkp4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_QLNQ75MddPpj-lwTGmpJd797lNj1xBQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "202293837472-b9fn5t6het5g4hc0p4h4541o2d1hkkp4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "202293837472-6a0ek70brolnrjk04i5v28l83s6s628q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.racharuchi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

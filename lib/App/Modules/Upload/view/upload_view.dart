@@ -4,6 +4,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Modules/Upload/binding/upload_binding.dart';
 import 'package:racharuchi/App/Modules/Upload/controller/upload_controller.dart';
 import 'package:video_player/video_player.dart';
+import 'dart:io';
 
 class UploadView extends StatelessWidget {
   const UploadView({super.key});
@@ -12,6 +13,12 @@ class UploadView extends StatelessWidget {
   Widget build(BuildContext context) {
     UploadBinding().dependencies();
     final UploadController controller = Get.find<UploadController>();
+
+    // Set callback for when upload is minimized
+    controller.onUploadMinimized = () {
+      // Return to previous screen but keep upload running
+      Get.back();
+    };
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
@@ -47,7 +54,14 @@ class UploadView extends StatelessWidget {
               size: 20,
             ),
           ),
-          onPressed: () => controller.cancelUpload(),
+          onPressed: () {
+            // If uploading, minimize instead of cancel
+            if (controller.isUploading.value) {
+              controller.minimizeUpload();
+            } else {
+              controller.cancelUpload();
+            }
+          },
         ),
         actions: [
           Obx(
@@ -97,35 +111,401 @@ class UploadView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Video Selection
                   _buildVideoSelection(controller),
                   const SizedBox(height: 24),
-
-                  // Title Input
                   _buildTitleInput(controller),
                   const SizedBox(height: 20),
-
-                  // Description Input
                   _buildDescriptionInput(controller),
                   const SizedBox(height: 24),
-
-                  // Category Selection
+                  _buildIngredientsSection(controller),
+                  const SizedBox(height: 24),
                   _buildCategorySection(controller),
                   const SizedBox(height: 24),
-
-                  // Tags Section
                   _buildTagsSection(controller),
                   const SizedBox(height: 40),
                 ],
               ),
             ),
-
-            // Upload Progress
-            if (controller.isUploading.value) _buildUploadProgress(controller),
+            // Full screen upload overlay
+            if (controller.isUploading.value &&
+                !controller.isUploadMinimized.value)
+              _buildUploadProgress(controller),
+            // Mini progress bar at bottom (Instagram style)
+            if (controller.isUploading.value &&
+                controller.isUploadMinimized.value)
+              _buildMiniProgressBar(controller),
           ],
         ),
       ),
     );
+  }
+
+  // Instagram-style mini progress bar at bottom
+  Widget _buildMiniProgressBar(UploadController controller) {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: GestureDetector(
+        onTap: () => controller.restoreUpload(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  // Thumbnail preview
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.grey.shade200,
+                      image:
+                          controller.selectedThumbnailUrl.value.isNotEmpty
+                              ? DecorationImage(
+                                image: FileImage(
+                                  File(controller.selectedThumbnailUrl.value),
+                                ),
+                                fit: BoxFit.cover,
+                              )
+                              : null,
+                    ),
+                    child:
+                        controller.selectedThumbnailUrl.value.isEmpty
+                            ? const Icon(
+                              Iconsax.video,
+                              size: 20,
+                              color: Colors.grey,
+                            )
+                            : null,
+                  ),
+                  const SizedBox(width: 12),
+                  // Progress info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Obx(
+                          () => Text(
+                            'Uploading ${controller.videoTitle.value.isNotEmpty ? controller.videoTitle.value : 'video'}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Stack(
+                          children: [
+                            Container(
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(1.5),
+                              ),
+                            ),
+                            Obx(
+                              () => Container(
+                                height: 3,
+                                width:
+                                    Get.width *
+                                    0.7 *
+                                    controller.uploadProgress.value,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0095F6),
+                                  borderRadius: BorderRadius.circular(1.5),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Obx(
+                          () => Text(
+                            '${(controller.uploadProgress.value * 100).toInt()}% • ${_getUploadStatus(controller.uploadProgress.value)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Cancel button
+                  GestureDetector(
+                    onTap: () => controller.cancelUpload(),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Iconsax.close_circle,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getUploadStatus(double progress) {
+    if (progress < 0.10) return 'Compressing...';
+    if (progress < 0.60) return 'Uploading...';
+    if (progress < 0.80) return 'Processing...';
+    if (progress < 0.95) return 'Finalizing...';
+    return 'Almost done';
+  }
+
+  Widget _buildUploadProgress(UploadController controller) {
+    return Container(
+      color: Colors.black.withOpacity(0.75),
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: controller.uploadProgress.value),
+          duration: const Duration(milliseconds: 300),
+          builder: (context, value, child) {
+            // Determine current step based on progress
+            String statusText = 'Preparing...';
+            if (value < 0.10) {
+              statusText = 'Compressing video...';
+            } else if (value < 0.60) {
+              statusText = 'Uploading video...';
+            } else if (value < 0.80) {
+              statusText = 'Uploading thumbnail...';
+            } else if (value < 0.95) {
+              statusText = 'Saving recipe...';
+            } else {
+              statusText = 'Almost done!';
+            }
+
+            return GestureDetector(
+              onTap: () => controller.minimizeUpload(),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Circular Progress Indicator
+                    SizedBox(
+                      height: 80,
+                      width: 80,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: value,
+                            strokeWidth: 6,
+                            backgroundColor: Colors.grey.shade100,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF0095F6),
+                            ),
+                          ),
+                          Obx(
+                            () => Text(
+                              '${(controller.uploadProgress.value * 100).toInt()}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 20,
+                                color: Color(0xFF262626),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Uploading...',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: Color(0xFF262626),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Minimize and Cancel buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => controller.minimizeUpload(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              backgroundColor: Colors.grey.shade50,
+                            ),
+                            child: Text(
+                              'Minimize',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => controller.cancelUpload(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              backgroundColor: Colors.red.shade50,
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoTypeIndicator(UploadController controller) {
+    return Obx(() {
+      if (controller.videoDurationInSeconds.value == 0) {
+        return const SizedBox.shrink();
+      }
+
+      final isShorts = controller.videoType.value == 'shorts';
+      final durationDisplay = controller.videoDuration.value;
+      final durationInSeconds = controller.videoDurationInSeconds.value;
+
+      return Container(
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors:
+                isShorts
+                    ? [const Color(0xFF4A90E2), const Color(0xFF357ABD)]
+                    : [const Color(0xFFFF4757), const Color(0xFFE63946)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: (isShorts
+                      ? const Color(0xFF4A90E2)
+                      : const Color(0xFFFF4757))
+                  .withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isShorts ? Iconsax.video_vertical : Iconsax.video,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isShorts ? 'YouTube Shorts' : 'Long Video',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Duration: $durationDisplay ($durationInSeconds seconds)',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isShorts)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  '#Shorts',
+                  style: TextStyle(
+                    color: Color(0xFF4A90E2),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildVideoSelection(UploadController controller) {
@@ -164,6 +544,7 @@ class UploadView extends StatelessWidget {
                       : _buildVideoPreview(controller),
             ),
           ),
+          _buildVideoTypeIndicator(controller),
         ],
       ),
     );
@@ -206,7 +587,7 @@ class UploadView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'MP4, MOV • Max 5 minutes',
+              'MP4, MOV • Max 25 minutes',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
           ],
@@ -228,8 +609,6 @@ class UploadView extends StatelessWidget {
                 child: CircularProgressIndicator(color: Colors.white),
               ),
             ),
-
-        // Gradient Overlay
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -243,8 +622,6 @@ class UploadView extends StatelessWidget {
             ),
           ),
         ),
-
-        // Play/Pause Button
         Center(
           child: GestureDetector(
             onTap: () => controller.toggleVideoPlay(),
@@ -269,8 +646,6 @@ class UploadView extends StatelessWidget {
             ),
           ),
         ),
-
-        // Change Video Button
         Positioned(
           top: 16,
           right: 16,
@@ -296,6 +671,175 @@ class UploadView extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildIngredientsSection(UploadController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ingredients',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: controller.ingredientTextController,
+                  decoration: InputDecoration(
+                    hintText: 'Ingredient name',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ),
+              Container(width: 1, height: 30, color: Colors.grey.shade200),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: controller.ingredientQuantityController,
+                  decoration: InputDecoration(
+                    hintText: 'Quantity',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => controller.addIngredient(),
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF4757).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Iconsax.add,
+                    color: Color(0xFFFF4757),
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Obx(
+          () => ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: controller.ingredients.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final ingredient = controller.ingredients[index];
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF4757).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Iconsax.subtitle,
+                        size: 16,
+                        color: Color(0xFFFF4757),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ingredient.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (ingredient.quantity.isNotEmpty)
+                            Text(
+                              ingredient.quantity,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => controller.removeIngredient(index),
+                      icon: const Icon(
+                        Iconsax.trash,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        if (controller.ingredients.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Iconsax.note, color: Colors.grey.shade400, size: 32),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No ingredients added yet',
+                    style: TextStyle(color: Colors.grey.shade500),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Add ingredients for your recipe',
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -542,7 +1086,6 @@ class UploadView extends StatelessWidget {
                 }).toList(),
           ),
         ),
-
         if (controller.selectedTags.isNotEmpty) ...[
           const SizedBox(height: 20),
           Container(
@@ -591,127 +1134,6 @@ class UploadView extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-
-  Widget _buildUploadProgress(UploadController controller) {
-    return Container(
-      color: Colors.black.withOpacity(0.6),
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: controller.uploadProgress.value),
-          duration: const Duration(milliseconds: 300),
-          builder: (context, value, child) {
-            return Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF4757), Color(0xFFFF6B6B)],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF4757).withOpacity(0.3),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Iconsax.send_2,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Uploading Your Recipe',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Please wait while we process your video',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  ),
-                  const SizedBox(height: 24),
-                  Stack(
-                    children: [
-                      Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      Container(
-                        height: 8,
-                        width: Get.width * 0.6 * value,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFF4757), Color(0xFFFF6B6B)],
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Obx(
-                    () => Text(
-                      '${(controller.uploadProgress.value * 100).toInt()}%',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 24,
-                        color: Color(0xFFFF4757),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => controller.cancelUpload(),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
     );
   }
 }

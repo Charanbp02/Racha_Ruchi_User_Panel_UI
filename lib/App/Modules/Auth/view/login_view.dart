@@ -56,7 +56,7 @@ class LoginView extends StatelessWidget {
 
                     const SizedBox(height: 24),
 
-                    // Social Login Buttons
+                    // Social Login Buttons (Only Google)
                     _buildSocialLoginButtons(controller),
 
                     const Spacer(flex: 1),
@@ -379,28 +379,6 @@ class LoginView extends StatelessWidget {
             textColor: Colors.black87,
             borderColor: Colors.grey.shade300,
             onTap: () => controller.continueWithGoogle(),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSocialButton(
-            icon: Iconsax.people,
-            label: "Facebook",
-            color: Colors.blue.shade700,
-            textColor: Colors.white,
-            borderColor: Colors.blue.shade700,
-            onTap: () => controller.continueWithFacebook(),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSocialButton(
-            icon: Iconsax.mobile,
-            label: "Apple",
-            color: Colors.black,
-            textColor: Colors.white,
-            borderColor: Colors.black,
-            onTap: () => controller.continueWithApple(),
           ),
         ),
       ],

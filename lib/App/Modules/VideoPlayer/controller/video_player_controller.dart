@@ -1,11 +1,12 @@
-import 'dart:ui';
+// lib/App/Modules/VideoPlayer/controller/video_player_controller.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class VideoPlayerControllerX extends GetxController {
-  late VideoPlayerController videoController;
+  VideoPlayerController? videoController;
   final isInitialized = false.obs;
   final isLoading = true.obs;
   final errorMessage = ''.obs;
@@ -14,136 +15,282 @@ class VideoPlayerControllerX extends GetxController {
   final duration = Duration.zero.obs;
   final showControls = true.obs;
 
-  // Video interaction states
   final isLiked = false.obs;
-  final isDisliked = false.obs;
-  final likeCount = 1243.obs;
-  final dislikeCount = 42.obs;
-  final commentCount = 89.obs;
+  final likeCount = 0.obs;
+  final commentCount = 0.obs;
   final isFollowing = false.obs;
-  final followerCount = 12500.obs;
+  final followerCount = 0.obs;
 
-  // Video info
-  final String? videoUrl;
-  final String? videoTitle;
-  final String? channelName;
-  final String? channelImage;
-  final String? videoId;
-  final String? description;
+  final String videoUrl;
+  final String videoTitle;
+  final String channelName;
+  final String channelImage;
+  final String videoId;
+  final String description;
+  final List<dynamic> ingredients;
+  final String userId;
 
-  static const String defaultVideoUrl =
-      'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   VideoPlayerControllerX({
-    this.videoUrl,
-    this.videoTitle,
-    this.channelName,
-    this.channelImage,
-    this.videoId,
-    this.description,
+    required this.videoUrl,
+    required this.videoTitle,
+    required this.channelName,
+    required this.channelImage,
+    required this.videoId,
+    required this.description,
+    required this.ingredients,
+    required this.userId,
   });
 
   @override
   void onInit() {
     super.onInit();
-    initializePlayer();
+    print('🎬 VideoPlayerControllerX initialized');
+    print(
+      '📹 Received videoUrl: ${videoUrl.isNotEmpty ? videoUrl.substring(0, videoUrl.length > 80 ? 80 : videoUrl.length) : 'EMPTY'}',
+    );
+    _initializeAndPlay();
+    _fetchData();
   }
 
-  Future<void> initializePlayer() async {
+  Future<void> _initializeAndPlay() async {
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final url = videoUrl ?? defaultVideoUrl;
+      if (videoUrl.isEmpty) {
+        throw Exception(
+          'Video URL is empty. Please check your Firestore data.',
+        );
+      }
 
-      videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-      await videoController.initialize();
+      print('🎬 Initializing video player...');
+      videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await videoController!.initialize();
 
-      duration.value = videoController.value.duration;
+      print('✅ Video initialized successfully');
+      duration.value = videoController!.value.duration;
       isInitialized.value = true;
       isLoading.value = false;
 
-      videoController.addListener(() {
-        if (videoController.value.isInitialized) {
-          position.value = videoController.value.position;
-          isPlaying.value = videoController.value.isPlaying;
+      videoController!.addListener(() {
+        if (videoController!.value.isInitialized) {
+          position.value = videoController!.value.position;
+          isPlaying.value = videoController!.value.isPlaying;
         }
         update();
       });
 
-      await videoController.play();
+      await videoController!.play();
       isPlaying.value = true;
 
       Future.delayed(const Duration(seconds: 3), () {
-        if (!isPlaying.value) return;
-        showControls.value = false;
+        if (isPlaying.value) showControls.value = false;
       });
 
+      await _incrementViewCount();
       update();
     } catch (e) {
-      print('Video Player Error: $e');
+      print('❌ Video Player Error: $e');
       isLoading.value = false;
-      errorMessage.value =
-          'Failed to load video. Please check your internet connection.';
+      errorMessage.value = _getErrorMessage(e.toString());
+    }
+  }
+
+  Future<void> _incrementViewCount() async {
+    try {
+      await _firestore.collection('recipe_videos').doc(videoId).update({
+        'views': FieldValue.increment(1),
+      });
+    } catch (e) {
+      print('Error incrementing views: $e');
+    }
+  }
+
+  String _getErrorMessage(String error) {
+    if (error.contains('404')) return 'Video not found.';
+    if (error.contains('403')) return 'Access denied. Please login.';
+    if (error.contains('Network')) return 'Network error. Check connection.';
+    return 'Failed to load video. Please try again.';
+  }
+
+  Future<void> _fetchData() async {
+    await Future.wait([
+      fetchVideoStats(),
+      fetchUserStats(),
+      checkIfLiked(),
+      checkIfFollowing(),
+    ]);
+  }
+
+  Future<void> fetchVideoStats() async {
+    try {
+      final doc =
+          await _firestore.collection('recipe_videos').doc(videoId).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        likeCount.value = data['likes'] ?? 0;
+        commentCount.value = data['comments'] ?? 0;
+      }
+    } catch (e) {
+      print('Error fetching stats: $e');
+    }
+  }
+
+  Future<void> fetchUserStats() async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        followerCount.value = data['followerCount'] ?? 0;
+      }
+    } catch (e) {
+      followerCount.value = 0;
+    }
+  }
+
+  Future<void> checkIfLiked() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final likeDoc =
+          await _firestore
+              .collection('recipe_videos')
+              .doc(videoId)
+              .collection('likes')
+              .doc(user.uid)
+              .get();
+      isLiked.value = likeDoc.exists;
+    } catch (e) {
+      print('Error checking like status: $e');
+    }
+  }
+
+  Future<void> checkIfFollowing() async {
+    final user = _auth.currentUser;
+    if (user == null || userId == user.uid) return;
+    try {
+      final followDoc =
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('followers')
+              .doc(user.uid)
+              .get();
+      isFollowing.value = followDoc.exists;
+    } catch (e) {
+      print('Error checking follow status: $e');
+    }
+  }
+
+  Future<void> toggleFollow() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      Get.snackbar(
+        'Login Required',
+        'Please login to follow',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    if (userId == user.uid) {
+      Get.snackbar(
+        'Info',
+        'You cannot follow yourself',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      final userRef = _firestore.collection('users').doc(userId);
+      final followRef = userRef.collection('followers').doc(user.uid);
+      final followDoc = await followRef.get();
+
+      if (followDoc.exists) {
+        await followRef.delete();
+        await userRef.update({'followerCount': FieldValue.increment(-1)});
+        isFollowing.value = false;
+        followerCount.value--;
+        Get.snackbar(
+          'Unfollowed',
+          'You unfollowed $channelName',
+          backgroundColor: Colors.grey,
+          colorText: Colors.white,
+        );
+      } else {
+        await followRef.set({
+          'followerId': user.uid,
+          'followerName': user.displayName ?? 'User',
+          'followerImage': user.photoURL ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await userRef.update({'followerCount': FieldValue.increment(1)});
+        isFollowing.value = true;
+        followerCount.value++;
+        Get.snackbar(
+          'Following',
+          'You are now following $channelName',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      print('Error toggling follow: $e');
     }
   }
 
   void playPause() {
-    if (videoController.value.isPlaying) {
-      videoController.pause();
+    if (!isInitialized.value || videoController == null) return;
+    if (videoController!.value.isPlaying) {
+      videoController!.pause();
       isPlaying.value = false;
       showControls.value = true;
     } else {
-      videoController.play();
+      videoController!.play();
       isPlaying.value = true;
       Future.delayed(const Duration(seconds: 3), () {
-        if (isPlaying.value) {
-          showControls.value = false;
-        }
+        if (isPlaying.value) showControls.value = false;
       });
     }
     update();
   }
 
-  void seekTo(double value) {
-    final newPosition = Duration(seconds: value.toInt());
-    videoController.seekTo(newPosition);
-    position.value = newPosition;
-    update();
-  }
-
   void forward10Seconds() {
+    if (!isInitialized.value || videoController == null) return;
     final newPosition = position.value + const Duration(seconds: 10);
     if (newPosition < duration.value) {
-      videoController.seekTo(newPosition);
+      videoController!.seekTo(newPosition);
       position.value = newPosition;
     } else {
-      videoController.seekTo(duration.value);
+      videoController!.seekTo(duration.value);
       position.value = duration.value;
     }
     _showControlOverlay();
-    update();
   }
 
   void rewind10Seconds() {
+    if (!isInitialized.value || videoController == null) return;
     final newPosition = position.value - const Duration(seconds: 10);
     if (newPosition > Duration.zero) {
-      videoController.seekTo(newPosition);
+      videoController!.seekTo(newPosition);
       position.value = newPosition;
     } else {
-      videoController.seekTo(Duration.zero);
+      videoController!.seekTo(Duration.zero);
       position.value = Duration.zero;
     }
     _showControlOverlay();
-    update();
   }
 
   void _showControlOverlay() {
     showControls.value = true;
     Future.delayed(const Duration(seconds: 2), () {
-      if (isPlaying.value) {
-        showControls.value = false;
-      }
+      if (isPlaying.value) showControls.value = false;
     });
   }
 
@@ -151,255 +298,106 @@ class VideoPlayerControllerX extends GetxController {
     showControls.value = !showControls.value;
     if (showControls.value && isPlaying.value) {
       Future.delayed(const Duration(seconds: 3), () {
-        if (isPlaying.value) {
-          showControls.value = false;
-        }
+        if (isPlaying.value) showControls.value = false;
       });
     }
-    update();
   }
 
-  void toggleLike() {
-    if (isLiked.value) {
-      isLiked.value = false;
-      likeCount.value--;
-    } else {
-      isLiked.value = true;
-      likeCount.value++;
-      if (isDisliked.value) {
-        isDisliked.value = false;
-        dislikeCount.value--;
-      }
+  Future<void> toggleLike() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      Get.snackbar(
+        'Login Required',
+        'Please login to like videos',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
     }
-    update();
-  }
 
-  void toggleDislike() {
-    if (isDisliked.value) {
-      isDisliked.value = false;
-      dislikeCount.value--;
-    } else {
-      isDisliked.value = true;
-      dislikeCount.value++;
-      if (isLiked.value) {
+    try {
+      final videoRef = _firestore.collection('recipe_videos').doc(videoId);
+      final likeRef = videoRef.collection('likes').doc(user.uid);
+      final likeDoc = await likeRef.get();
+
+      if (likeDoc.exists) {
+        await likeRef.delete();
+        await videoRef.update({'likes': FieldValue.increment(-1)});
         isLiked.value = false;
         likeCount.value--;
+        Get.snackbar(
+          'Removed Like',
+          'You unliked this video',
+          backgroundColor: Colors.grey,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 1),
+        );
+      } else {
+        await likeRef.set({
+          'userId': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await videoRef.update({'likes': FieldValue.increment(1)});
+        isLiked.value = true;
+        likeCount.value++;
+        Get.snackbar(
+          'Liked!',
+          'You liked this video',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 1),
+        );
       }
+    } catch (e) {
+      print('Error toggling like: $e');
     }
-    update();
   }
 
   void shareVideo() {
     Get.snackbar(
       'Share',
-      'Sharing video...',
+      'Share feature coming soon',
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.white,
-      colorText: Colors.black87,
-      duration: const Duration(seconds: 1),
+      backgroundColor: Colors.blue,
+      colorText: Colors.white,
     );
   }
 
   void openComments() {
-    Get.to(
-      () => CommentsPage(
-        videoTitle: videoTitle ?? 'Video',
-        commentCount: commentCount.value,
-      ),
-      transition: Transition.rightToLeft,
+    Get.toNamed(
+      '/comments',
+      arguments: {
+        'videoId': videoId,
+        'videoTitle': videoTitle,
+        'commentCount': commentCount.value,
+      },
     );
   }
 
-  void toggleFollow() {
-    isFollowing.value = !isFollowing.value;
-    Get.snackbar(
-      isFollowing.value ? 'Following' : 'Unfollowed',
-      isFollowing.value
-          ? 'You are now following $channelName'
-          : 'You unfollowed $channelName',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.white,
-      colorText: Colors.black87,
-      duration: const Duration(seconds: 1),
-    );
-    update();
+  void retry() {
+    _initializeAndPlay();
   }
 
   String formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(duration.inHours);
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
-
-    if (duration.inHours > 0) {
-      return '$hours:$minutes:$seconds';
-    }
     return '$minutes:$seconds';
   }
 
   @override
   void onClose() {
-    videoController.removeListener(() {});
-    videoController.dispose();
+    if (videoController != null) {
+      videoController!.dispose();
+    }
     super.onClose();
   }
 }
 
-// Comments Page
-class CommentsPage extends StatelessWidget {
-  final String videoTitle;
-  final int commentCount;
-
-  const CommentsPage({
-    super.key,
-    required this.videoTitle,
-    required this.commentCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Comments ($commentCount)'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Iconsax.arrow_left),
-          onPressed: () => Get.back(),
-        ),
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundImage: NetworkImage(
-                    'https://randomuser.me/api/portraits/men/1.jpg',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'Comment',
-                    style: TextStyle(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: 10,
-              itemBuilder: (context, index) {
-                return _buildCommentTile();
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentTile() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const CircleAvatar(
-            radius: 20,
-            backgroundImage: NetworkImage(
-              'https://randomuser.me/api/portraits/men/2.jpg',
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'User Name',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '2 days ago',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Great video! Really enjoyed watching this recipe. Will definitely try it at home.',
-                  style: TextStyle(color: Colors.black87, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Iconsax.like_1, size: 16),
-                      color: Colors.grey[600],
-                      onPressed: () {},
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '245',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                    const SizedBox(width: 16),
-                    IconButton(
-                      icon: const Icon(Iconsax.dislike, size: 16),
-                      color: Colors.grey[600],
-                      onPressed: () {},
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      'Reply',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+extension NumberFormatting on int {
+  String formatNumber() {
+    if (this >= 1000000) return '${(this / 1000000).toStringAsFixed(1)}M';
+    if (this >= 1000) return '${(this / 1000).toStringAsFixed(1)}K';
+    return toString();
   }
 }

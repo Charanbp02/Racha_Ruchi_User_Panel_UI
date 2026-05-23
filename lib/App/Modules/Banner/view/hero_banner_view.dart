@@ -32,7 +32,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
       duration: const Duration(milliseconds: 300),
     );
 
-    // ✅ Fix: Register controller first
+    // Register or find controller
     if (!Get.isRegistered<HeroBannerController>()) {
       controller = Get.put(HeroBannerController());
     } else {
@@ -167,7 +167,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
             ],
           ),
           const SizedBox(height: 12),
-          _buildModernIndicators(),
+          //_buildModernIndicators(),
         ],
       );
     });
@@ -180,6 +180,12 @@ class _HeroBannerViewState extends State<HeroBannerView>
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Colors.grey.shade200,
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD32F2F)),
+        ),
       ),
     );
   }

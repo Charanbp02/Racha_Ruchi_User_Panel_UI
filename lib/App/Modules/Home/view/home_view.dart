@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Custom/appBar.dart';
+import 'package:racharuchi/App/Modules/All_Videos/view/videos_view.dart';
 import 'package:racharuchi/App/Modules/Banner/view/hero_banner_view.dart';
 import 'package:racharuchi/App/Modules/Categories/view/category_view.dart';
 import 'package:racharuchi/App/Modules/Home/Controller/Home_Controller.dart';
-import 'package:racharuchi/App/Modules/Popular_Recipes/view/popular_recipes_view.dart';
 import 'package:racharuchi/App/Modules/Search/view/search_bar_view.dart';
-import 'package:racharuchi/App/Modules/Top_Recipe_Video/view/top_recipes_view.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
@@ -19,7 +18,7 @@ class HomeView extends GetView<HomeController> {
       appBar: const CustomAppBar(title: "Racha Ruchi"),
       body: Column(
         children: [
-          // SearchBar - Fixed (doesn't scroll)
+          // SearchBar - Fixed
           const SearchBarView(),
           const SizedBox(height: 5),
 
@@ -29,14 +28,15 @@ class HomeView extends GetView<HomeController> {
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 20),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const CategorySectionView(),
                   const SizedBox(height: 16),
+
                   const HeroBannerView(),
-                  const SizedBox(height: 16),
-                  const TopRecipeVideosSection(),
-                  const SizedBox(height: 16),
-                  const PopularRecipesSection(),
+
+                  // Embedded VideosView
+                  VideosView(embedded: true),
                 ],
               ),
             ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Modules/Splash/controller/splash_controller.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class SplashView extends StatelessWidget {
   const SplashView({super.key});
@@ -17,7 +17,7 @@ class SplashView extends StatelessWidget {
           children: [
             /// Animated Gradient Background
             AnimatedContainer(
-              duration: Duration(milliseconds: 500),
+              duration: const Duration(milliseconds: 500),
               decoration: BoxDecoration(
                 gradient: SweepGradient(
                   center: Alignment.center,
@@ -44,7 +44,7 @@ class SplashView extends StatelessWidget {
                 top: bubble.y,
                 child: AnimatedOpacity(
                   opacity: 0.3,
-                  duration: Duration(milliseconds: 1000),
+                  duration: const Duration(milliseconds: 1000),
                   child: Container(
                     width: bubble.size,
                     height: bubble.size,
@@ -76,17 +76,17 @@ class SplashView extends StatelessWidget {
                       /// Ripple Animation
                       AnimatedOpacity(
                         opacity: controller.rippleOpacity.value,
-                        duration: Duration(milliseconds: 600),
+                        duration: const Duration(milliseconds: 600),
                         child: AnimatedScale(
                           scale: controller.rippleScale.value,
-                          duration: Duration(milliseconds: 600),
+                          duration: const Duration(milliseconds: 600),
                           curve: Curves.easeOutCubic,
                           child: Container(
                             width: 200,
                             height: 200,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withOpacity(0.15),
                             ),
                           ),
                         ),
@@ -95,10 +95,10 @@ class SplashView extends StatelessWidget {
                       /// Glow Effect
                       AnimatedOpacity(
                         opacity: controller.glowOpacity.value,
-                        duration: Duration(milliseconds: 800),
+                        duration: const Duration(milliseconds: 800),
                         child: Container(
-                          width: 140,
-                          height: 140,
+                          width: 150,
+                          height: 150,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             boxShadow: [
@@ -112,7 +112,7 @@ class SplashView extends StatelessWidget {
                         ),
                       ),
 
-                      /// Logo with Transformations
+                      /// RC Logo with Transformations
                       Transform.rotate(
                         angle: controller.rotation.value,
                         child: AnimatedScale(
@@ -120,24 +120,21 @@ class SplashView extends StatelessWidget {
                           duration: const Duration(milliseconds: 800),
                           curve: Curves.elasticOut,
                           child: Container(
-                            width: 120,
-                            height: 120,
+                            width: 130,
+                            height: 130,
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.white,
-                                  Colors.white.withOpacity(0.9),
-                                ],
+                              gradient: const LinearGradient(
+                                colors: [Color(0xffa855f7), Color(0xffec4899)],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(35),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 20,
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 25,
                                   spreadRadius: 5,
-                                  offset: Offset(0, 10),
+                                  offset: const Offset(0, 10),
                                 ),
                               ],
                             ),
@@ -146,30 +143,54 @@ class SplashView extends StatelessWidget {
                                 /// Shimmer Effect Layer
                                 Positioned.fill(
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(30),
-                                    child: AnimatedAlign(
-                                      duration: Duration(milliseconds: 1200),
-                                      alignment: Alignment(
-                                        controller.shimmerOffset.value,
-                                        0,
-                                      ),
-                                      child: Container(
-                                        width: 60,
-                                        color: Colors.white.withOpacity(0.4),
+                                    borderRadius: BorderRadius.circular(35),
+                                    child: Obx(
+                                      () => Align(
+                                        alignment: Alignment(
+                                          controller.shimmerOffset.value,
+                                          0,
+                                        ),
+                                        child: Container(
+                                          width: 65,
+                                          height: 130,
+                                          color: Colors.white.withOpacity(0.3),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
 
-                                /// Rotating Icon
+                                /// RC Logo Text
                                 Center(
-                                  child: Transform.rotate(
-                                    angle: controller.iconRotation.value,
-                                    child: Icon(
-                                      Iconsax.cake,
-                                      color: Color(0xFFE53935),
-                                      size: 60,
-                                    ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "RC",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 52,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          letterSpacing: 4,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black.withOpacity(
+                                                0.2,
+                                              ),
+                                              blurRadius: 10,
+                                              offset: const Offset(2, 2),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        width: 50,
+                                        height: 2,
+                                        margin: const EdgeInsets.only(top: 4),
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -194,7 +215,7 @@ class SplashView extends StatelessWidget {
                           duration: const Duration(milliseconds: 800),
                           child: ShaderMask(
                             shaderCallback: (Rect bounds) {
-                              return LinearGradient(
+                              return const LinearGradient(
                                 colors: [
                                   Colors.white,
                                   Colors.white70,
@@ -205,7 +226,7 @@ class SplashView extends StatelessWidget {
                             },
                             child: Text(
                               "Racha Ruchi",
-                              style: TextStyle(
+                              style: GoogleFonts.poppins(
                                 fontSize: 42,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -214,7 +235,7 @@ class SplashView extends StatelessWidget {
                                   Shadow(
                                     color: Colors.black.withOpacity(0.3),
                                     blurRadius: 10,
-                                    offset: Offset(2, 2),
+                                    offset: const Offset(2, 2),
                                   ),
                                 ],
                               ),
@@ -230,7 +251,7 @@ class SplashView extends StatelessWidget {
                         opacity: controller.taglineOpacity.value,
                         duration: const Duration(milliseconds: 800),
                         child: Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 8,
                           ),
@@ -244,7 +265,7 @@ class SplashView extends StatelessWidget {
                           ),
                           child: Text(
                             "Taste the Tradition",
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 16,
                               color: Colors.white,
                               letterSpacing: 1.5,

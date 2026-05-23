@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:racharuchi/App/Models/My_Recipe_Model/recipe_model.dart';
-import '../controller/my_recipes_controller.dart';
+import 'package:racharuchi/App/Modules/My_Recipes/controller/my_recipes_controller.dart';
 
 class MyRecipesView extends StatelessWidget {
   const MyRecipesView({super.key});
@@ -38,7 +38,60 @@ class MyRecipesView extends StatelessWidget {
         ],
       ),
       body: Obx(() {
-        if (controller.isLoading.value) {
+        // Check authentication
+        if (!controller.isAuthenticated.value) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE53935).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Iconsax.lock,
+                    size: 60,
+                    color: Color(0xFFE53935),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Login Required',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2D2D2D),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please login to view your recipe videos',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Get.toNamed('/login'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Text('Login Now'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Show loading state
+        if (controller.isLoading.value && controller.myRecipes.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFFE53935)),
           );
@@ -62,13 +115,16 @@ class MyRecipesView extends StatelessWidget {
               child:
                   controller.filteredRecipes.isEmpty
                       ? _buildEmptyState(controller)
-                      : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: controller.filteredRecipes.length,
-                        itemBuilder: (context, index) {
-                          final recipe = controller.filteredRecipes[index];
-                          return _buildRecipeCard(recipe, controller);
-                        },
+                      : RefreshIndicator(
+                        onRefresh: () => controller.refreshData(),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: controller.filteredRecipes.length,
+                          itemBuilder: (context, index) {
+                            final recipe = controller.filteredRecipes[index];
+                            return _buildRecipeCard(recipe, controller);
+                          },
+                        ),
                       ),
             ),
           ],
@@ -83,14 +139,14 @@ class MyRecipesView extends StatelessWidget {
       child: TextField(
         onChanged: (value) => controller.searchRecipes(value),
         decoration: InputDecoration(
-          hintText: 'Search your recipes...',
+          hintText: 'Search your recipe videos...',
           hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
           prefixIcon: const Icon(
             Iconsax.search_normal,
             size: 20,
             color: Colors.grey,
           ),
-          
+
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
@@ -172,7 +228,7 @@ class MyRecipesView extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            '${controller.filteredRecipes.length} recipes',
+            '${controller.filteredRecipes.length} recipe videos',
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
           if (controller.selectedFilter.value != 'All')
@@ -204,14 +260,14 @@ class MyRecipesView extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Iconsax.document,
+              Iconsax.video,
               size: 60,
               color: Color(0xFFE53935),
             ),
           ),
           const SizedBox(height: 20),
           const Text(
-            'No Recipes Found',
+            'No Recipe Videos',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -222,7 +278,7 @@ class MyRecipesView extends StatelessWidget {
           Text(
             controller.searchQuery.value.isNotEmpty
                 ? 'Try searching with different keywords'
-                : 'Start adding your delicious recipes',
+                : 'You haven\'t uploaded any recipe videos yet',
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 20),
@@ -239,7 +295,7 @@ class MyRecipesView extends StatelessWidget {
                   vertical: 12,
                 ),
               ),
-              child: const Text('Add New Recipe'),
+              child: const Text('Upload Your First Recipe'),
             ),
         ],
       ),
@@ -263,7 +319,7 @@ class MyRecipesView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Recipe Image
+          // Recipe Video Thumbnail
           Stack(
             children: [
               ClipRRect(
@@ -289,11 +345,28 @@ class MyRecipesView extends StatelessWidget {
                         height: 180,
                         color: Colors.grey.shade100,
                         child: const Icon(
-                          Iconsax.gallery,
+                          Iconsax.video,
                           size: 50,
                           color: Colors.grey,
                         ),
                       ),
+                ),
+              ),
+              // Video Icon Overlay
+              Positioned(
+                bottom: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Iconsax.play5,
+                    size: 20,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               // Status Badge
@@ -319,7 +392,7 @@ class MyRecipesView extends StatelessWidget {
                   ),
                 ),
               ),
-              // Edit Button
+              // Edit/Delete Buttons
               Positioned(
                 top: 12,
                 right: 12,
@@ -413,6 +486,12 @@ class MyRecipesView extends StatelessWidget {
                       recipe.comments,
                       Colors.blue,
                     ),
+                    const SizedBox(width: 16),
+                    _buildStatItem(
+                      Iconsax.eye,
+                      recipe.viewsCount.toString(),
+                      Colors.green,
+                    ),
                     const Spacer(),
                     Text(
                       recipe.createdAt,
@@ -463,8 +542,6 @@ class MyRecipesView extends StatelessWidget {
         return Colors.green;
       case 'Draft':
         return Colors.orange;
-      case 'Private':
-        return Colors.blue;
       default:
         return Colors.grey;
     }
