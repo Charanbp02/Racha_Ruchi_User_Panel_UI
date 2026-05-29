@@ -63,7 +63,7 @@ class CategorySectionView extends StatelessWidget {
                   boxShadow: [
                     if (isSelected)
                       BoxShadow(
-                        color: const Color(0xFFE53935).withOpacity(0.25),
+                        color: const Color(0xFFE53935).withValues(alpha: 0.25),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       )

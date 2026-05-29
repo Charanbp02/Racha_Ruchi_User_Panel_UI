@@ -41,19 +41,22 @@ class VideoPlayerView extends StatelessWidget {
     print('🎬 VideoPlayerView - Title: ${video.title}');
     print('📹 VideoPlayerView - URL: ${video.videoUrl}');
 
-    final VideoPlayerControllerX controller = Get.put(
-      VideoPlayerControllerX(
-        videoUrl: video.videoUrl,
-        videoTitle: video.title,
-        channelName: video.channelName,
-        channelImage: video.channelAvatar,
-        videoId: video.id,
-        description: video.description,
-        ingredients: video.ingredients,
-        userId: video.channelId,
-      ),
-      tag: video.id,
-    );
+    final VideoPlayerControllerX controller =
+        Get.isRegistered<VideoPlayerControllerX>(tag: video.id)
+            ? Get.find<VideoPlayerControllerX>(tag: video.id)
+            : Get.put(
+              VideoPlayerControllerX(
+                videoUrl: video.videoUrl,
+                videoTitle: video.title,
+                channelName: video.channelName,
+                channelImage: video.channelAvatar,
+                videoId: video.id,
+                description: video.description,
+                ingredients: video.ingredients,
+                userId: video.channelId,
+              ),
+              tag: video.id,
+            );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -70,12 +73,6 @@ class VideoPlayerView extends StatelessWidget {
           icon: const Icon(Iconsax.arrow_left),
           onPressed: () => Get.back(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.more),
-            onPressed: () => _showVideoOptions(video, controller),
-          ),
-        ],
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
@@ -160,7 +157,7 @@ class VideoPlayerView extends StatelessWidget {
               opacity: controller.showControls.value ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 300),
               child: Container(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -222,7 +219,7 @@ class VideoPlayerView extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -258,13 +255,6 @@ class VideoPlayerView extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Iconsax.timer_1, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  '${controller.duration.value.inMinutes} min',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                ),
-                const SizedBox(width: 12),
                 const Icon(Iconsax.eye, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
                 Text(
@@ -306,7 +296,7 @@ class VideoPlayerView extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
+          color: Colors.black.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(30),
         ),
         child: Row(
@@ -326,6 +316,100 @@ class VideoPlayerView extends StatelessWidget {
     );
   }
 
+  // SIMPLE YOUTUBE-STYLE LIKE BUTTON - Lightweight, No Lag
+  Widget _buildSimpleLikeButton(VideoPlayerControllerX controller) {
+    return Obx(
+      () => GestureDetector(
+        onTap: () async {
+          // Simple scale animation
+          controller.animateLike.value = true;
+          await controller.toggleLike();
+          Future.delayed(const Duration(milliseconds: 200), () {
+            controller.animateLike.value = false;
+          });
+        },
+        child: AnimatedScale(
+          scale: controller.animateLike.value ? 1.2 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.elasticOut,
+          child: Column(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                transitionBuilder: (child, animation) {
+                  return ScaleTransition(scale: animation, child: child);
+                },
+                child: Icon(
+                  controller.isLiked.value ? Iconsax.like_15 : Iconsax.like_1,
+                  key: ValueKey(controller.isLiked.value),
+                  color:
+                      controller.isLiked.value ? Colors.blue : Colors.grey[600],
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 6),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 150),
+                style: TextStyle(
+                  color:
+                      controller.isLiked.value ? Colors.blue : Colors.grey[600],
+                  fontSize: 12,
+                  fontWeight:
+                      controller.isLiked.value
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                ),
+                child: Text(controller.likeCount.value.formatNumber()),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // EVEN SIMPLER - Just scale animation (Recommended)
+  Widget _buildSuperSimpleLikeButton(VideoPlayerControllerX controller) {
+    return Obx(
+      () => GestureDetector(
+        onTap: () async {
+          controller.animateLike.value = true;
+          await controller.toggleLike();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            controller.animateLike.value = false;
+          });
+        },
+        child: AnimatedScale(
+          scale: controller.animateLike.value ? 1.3 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          child: Column(
+            children: [
+              Icon(
+                controller.isLiked.value ? Iconsax.like_15 : Iconsax.like_1,
+                color:
+                    controller.isLiked.value ? Colors.blue : Colors.grey[600],
+                size: 28,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                controller.likeCount.value.formatNumber(),
+                style: TextStyle(
+                  color:
+                      controller.isLiked.value ? Colors.blue : Colors.grey[600],
+                  fontSize: 12,
+                  fontWeight:
+                      controller.isLiked.value
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildActionButtons(VideoPlayerControllerX controller) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -338,24 +422,29 @@ class VideoPlayerView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Obx(
-            () => _buildActionButton(
-              icon: Iconsax.like_1,
-              label: controller.likeCount.value.formatNumber(),
-              isActive: controller.isLiked.value,
-              activeColor: Colors.blue,
-              onTap: controller.toggleLike,
-            ),
-          ),
+          // Use SUPER SIMPLE like button (Recommended - No lag)
+          _buildSuperSimpleLikeButton(controller),
+
+          // Comment button
           _buildActionButton(
             icon: Iconsax.message,
             label: controller.commentCount.value.formatNumber(),
             onTap: controller.openComments,
           ),
+
+          // Share button
           _buildActionButton(
             icon: Iconsax.export_1,
             label: 'Share',
             onTap: controller.shareVideo,
+          ),
+
+          // Report button
+          _buildActionButton(
+            icon: Iconsax.flag,
+            label: 'Report',
+            activeColor: Colors.red,
+            onTap: controller.reportVideoBottomSheet,
           ),
         ],
       ),
@@ -406,7 +495,6 @@ class VideoPlayerView extends StatelessWidget {
           radius: 24,
           backgroundImage: NetworkImage(video.channelAvatar),
           onBackgroundImageError: (_, __) {},
-          child: const Icon(Iconsax.user, size: 24),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -431,33 +519,59 @@ class VideoPlayerView extends StatelessWidget {
             ],
           ),
         ),
-        Obx(
-          () => ElevatedButton.icon(
-            onPressed: controller.toggleFollow,
-            icon: Icon(
-              controller.isFollowing.value
-                  ? Iconsax.tick_circle
-                  : Iconsax.add_circle,
-              size: 16,
-              color:
-                  controller.isFollowing.value ? Colors.black87 : Colors.white,
-            ),
-            label: Text(
-              controller.isFollowing.value ? 'FOLLOWING' : 'FOLLOW',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  controller.isFollowing.value ? Colors.grey[200] : Colors.red,
-              foregroundColor:
-                  controller.isFollowing.value ? Colors.black87 : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+        // ✅ FIXED: Use public getter instead of private _auth
+        if (controller.userId != controller.currentUserId)
+          Obx(
+            () => ElevatedButton.icon(
+              onPressed:
+                  controller.isFollowingLoading.value
+                      ? null
+                      : controller.toggleFollow,
+              icon:
+                  controller.isFollowingLoading.value
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : Icon(
+                        controller.isFollowing.value
+                            ? Iconsax.tick_circle
+                            : Iconsax.add_circle,
+                        size: 16,
+                        color:
+                            controller.isFollowing.value
+                                ? Colors.black87
+                                : Colors.white,
+                      ),
+              label: Text(
+                controller.isFollowingLoading.value
+                    ? 'WAIT...'
+                    : (controller.isFollowing.value ? 'FOLLOWING' : 'FOLLOW'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              elevation: 0,
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    controller.isFollowing.value
+                        ? Colors.grey[200]
+                        : Colors.red,
+                foregroundColor:
+                    controller.isFollowing.value
+                        ? Colors.black87
+                        : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                elevation: 0,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -575,53 +689,6 @@ class VideoPlayerView extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showVideoOptions(VideoModel video, VideoPlayerControllerX controller) {
-    Get.bottomSheet(
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Iconsax.save_2, color: Colors.black87),
-                title: const Text('Save to playlist'),
-                onTap: () => Get.back(),
-              ),
-              ListTile(
-                leading: const Icon(Iconsax.share, color: Colors.black87),
-                title: const Text('Share'),
-                onTap: () {
-                  Get.back();
-                  controller.shareVideo();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Iconsax.message, color: Colors.black87),
-                title: const Text('Report'),
-                onTap: () => Get.back(),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-      backgroundColor: Colors.transparent,
     );
   }
 }

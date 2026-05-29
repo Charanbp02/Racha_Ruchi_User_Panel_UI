@@ -200,14 +200,17 @@ class CouponsView extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       child: Material(
         elevation: 4,
-        shadowColor: coupon.type.color.withOpacity(0.2),
+        shadowColor: coupon.type.color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [coupon.type.color, coupon.type.color.withOpacity(0.8)],
+              colors: [
+                coupon.type.color,
+                coupon.type.color.withValues(alpha: 0.8),
+              ],
             ),
             borderRadius: BorderRadius.circular(20),
           ),
@@ -220,7 +223,7 @@ class CouponsView extends StatelessWidget {
                 bottom: 0,
                 child: Container(
                   width: 2,
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                 ),
               ),
 
@@ -236,7 +239,7 @@ class CouponsView extends StatelessWidget {
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
@@ -331,7 +334,7 @@ class CouponsView extends StatelessWidget {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: const BorderRadius.only(
                         bottomLeft: Radius.circular(20),
                         bottomRight: Radius.circular(20),
@@ -347,7 +350,7 @@ class CouponsView extends StatelessWidget {
                               'Min. Order ${coupon.minOrder}',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.white.withOpacity(0.9),
+                                color: Colors.white.withValues(alpha: 0.9),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -355,7 +358,7 @@ class CouponsView extends StatelessWidget {
                               'Valid till: ${coupon.validTill}',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                             ),
                           ],
@@ -416,8 +419,8 @@ class CouponsView extends StatelessWidget {
                     decoration: BoxDecoration(
                       color:
                           controller.selectedTab.value == 1
-                              ? Colors.green.withOpacity(0.7)
-                              : Colors.red.withOpacity(0.7),
+                              ? Colors.green.withValues(alpha: 0.7)
+                              : Colors.red.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(

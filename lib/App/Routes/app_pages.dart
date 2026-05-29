@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:racharuchi/App/Modules/AIFloatingButton/binding/ai_floating_binding.dart';
-import 'package:racharuchi/App/Modules/AIFloatingButton/view/ai_floating_view.dart';
+import 'package:racharuchi/App/Modules/AIChat/binding/ai_chat_binding.dart';
+import 'package:racharuchi/App/Modules/AIChat/view/ai_chat_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/binding/address_binding.dart';
 import 'package:racharuchi/App/Modules/AddressBook/view/address_view.dart';
 import 'package:racharuchi/App/Modules/All_Videos/binding/videos_binding.dart';
@@ -157,14 +157,14 @@ class AppPages {
       binding: VideoPlayerBinding(),
     ),
     GetPage(
-      name: Routes.AI_FLOATING,
-      page: () => const AIFloatingView(),
-      binding: AIFloatingBinding(),
-    ),
-    GetPage(
       name: Routes.ALL_VIDEOS,
       page: () => VideosView(),
       binding: VideosBinding(),
+    ),
+    GetPage(
+      name: Routes.AICHAT,
+      page: () => const AIChatView(),
+      binding: AIChatBinding(),
     ),
   ];
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconly/iconly.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Modules/BottomNav/controller/bottom_nav_controller.dart';
 import 'package:racharuchi/App/Modules/Home/View/Home_view.dart';
@@ -54,8 +53,8 @@ class BottomNavView extends StatelessWidget {
             elevation: 0,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(IconlyLight.home),
-                activeIcon: Icon(IconlyBold.home),
+                icon: Icon(Iconsax.home),
+                activeIcon: Icon(Iconsax.home5),
                 label: 'Home',
               ),
               BottomNavigationBarItem(

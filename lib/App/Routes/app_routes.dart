@@ -27,8 +27,8 @@ abstract class AppRoutes {
   static const STATS = Routes.STATS;
   static const SOCIAL = Routes.SOCIAL;
   static const VIDEO_PLAYER = Routes.VIDEO_PLAYER;
-  static const AI_FLOATING = Routes.AI_FLOATING;
   static const ALL_VIDEOS = Routes.ALL_VIDEOS;
+  static const AICHAT = Routes.AICHAT;
 }
 
 // routes.dart (ensure all routes are defined)
@@ -59,6 +59,6 @@ abstract class Routes {
   static const STATS = '/stats';
   static const SOCIAL = '/social';
   static const VIDEO_PLAYER = '/video-player';
-  static const AI_FLOATING = '/ai-floating';
   static const ALL_VIDEOS = '/all-videos';
+  static const AICHAT = '/ai-chat';
 }

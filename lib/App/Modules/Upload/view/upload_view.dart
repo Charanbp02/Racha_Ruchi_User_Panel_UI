@@ -42,7 +42,7 @@ class UploadView extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -154,7 +154,7 @@ class UploadView extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -282,7 +282,7 @@ class UploadView extends StatelessWidget {
 
   Widget _buildUploadProgress(UploadController controller) {
     return Container(
-      color: Colors.black.withOpacity(0.75),
+      color: Colors.black.withValues(alpha: 0.75),
       child: Center(
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: controller.uploadProgress.value),
@@ -442,7 +442,7 @@ class UploadView extends StatelessWidget {
               color: (isShorts
                       ? const Color(0xFF4A90E2)
                       : const Color(0xFFFF4757))
-                  .withOpacity(0.2),
+                  .withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -453,7 +453,7 @@ class UploadView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -479,7 +479,7 @@ class UploadView extends StatelessWidget {
                   Text(
                     'Duration: $durationDisplay ($durationInSeconds seconds)',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontSize: 12,
                     ),
                   ),
@@ -530,7 +530,7 @@ class UploadView extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 15,
                   offset: const Offset(0, 4),
                 ),
@@ -567,7 +567,7 @@ class UploadView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF4757).withOpacity(0.1),
+                color: const Color(0xFFFF4757).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -615,9 +615,9 @@ class UploadView extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withOpacity(0.3),
+                Colors.black.withValues(alpha: 0.3),
                 Colors.transparent,
-                Colors.black.withOpacity(0.3),
+                Colors.black.withValues(alpha: 0.3),
               ],
             ),
           ),
@@ -632,7 +632,7 @@ class UploadView extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),
@@ -658,7 +658,7 @@ class UploadView extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                   ),
                 ],
@@ -694,7 +694,7 @@ class UploadView extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -733,7 +733,7 @@ class UploadView extends StatelessWidget {
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF4757).withOpacity(0.1),
+                    color: const Color(0xFFFF4757).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -768,7 +768,7 @@ class UploadView extends StatelessWidget {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF4757).withOpacity(0.1),
+                        color: const Color(0xFFFF4757).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
@@ -863,7 +863,7 @@ class UploadView extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -922,7 +922,7 @@ class UploadView extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -998,7 +998,9 @@ class UploadView extends StatelessWidget {
                     selected: isSelected,
                     onSelected:
                         (selected) => controller.selectCategory(category.id),
-                    selectedColor: const Color(0xFFFF4757).withOpacity(0.1),
+                    selectedColor: const Color(
+                      0xFFFF4757,
+                    ).withValues(alpha: 0.1),
                     checkmarkColor: const Color(0xFFFF4757),
                     backgroundColor: Colors.white,
                     side: BorderSide(
@@ -1064,7 +1066,7 @@ class UploadView extends StatelessWidget {
                         boxShadow: [
                           if (!isSelected)
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 5,
                             ),
                         ],
@@ -1093,13 +1095,13 @@ class UploadView extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFFFF4757).withOpacity(0.05),
-                  const Color(0xFFFF4757).withOpacity(0.02),
+                  const Color(0xFFFF4757).withValues(alpha: 0.05),
+                  const Color(0xFFFF4757).withValues(alpha: 0.02),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFFFF4757).withOpacity(0.1),
+                color: const Color(0xFFFF4757).withValues(alpha: 0.1),
               ),
             ),
             child: Row(
@@ -1107,7 +1109,7 @@ class UploadView extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF4757).withOpacity(0.1),
+                    color: const Color(0xFFFF4757).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

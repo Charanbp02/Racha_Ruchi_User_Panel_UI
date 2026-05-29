@@ -78,7 +78,7 @@ class CartView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withOpacity(0.1),
+              color: const Color(0xFFE53935).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -224,7 +224,7 @@ class CartView extends StatelessWidget {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE53935).withOpacity(0.1),
+                  color: const Color(0xFFE53935).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Row(
@@ -344,9 +344,11 @@ class CartView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFE53935).withOpacity(0.05),
+        color: const Color(0xFFE53935).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE53935).withOpacity(0.2)),
+        border: Border.all(
+          color: const Color(0xFFE53935).withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [

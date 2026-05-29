@@ -522,7 +522,7 @@ class UploadController extends GetxController {
 
       Get.snackbar(
         'Success! 🎉',
-        'Video uploaded successfully! Admin will review it soon.',
+        'Video uploaded successfully!',
         backgroundColor: Colors.green,
         colorText: Colors.white,
         duration: const Duration(seconds: 3),

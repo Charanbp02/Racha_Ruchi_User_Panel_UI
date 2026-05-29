@@ -47,7 +47,7 @@ class MyRecipesView extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE53935).withOpacity(0.1),
+                    color: const Color(0xFFE53935).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -198,7 +198,9 @@ class MyRecipesView extends StatelessWidget {
                       isSelected
                           ? [
                             BoxShadow(
-                              color: const Color(0xFFE53935).withOpacity(0.3),
+                              color: const Color(
+                                0xFFE53935,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -256,7 +258,7 @@ class MyRecipesView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withOpacity(0.1),
+              color: const Color(0xFFE53935).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -359,7 +361,7 @@ class MyRecipesView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -403,16 +405,6 @@ class MyRecipesView extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(
-                          Iconsax.edit,
-                          size: 18,
-                          color: Color(0xFFE53935),
-                        ),
-                        onPressed: () => controller.editRecipe(recipe),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
                       const SizedBox(width: 4),
                       IconButton(
                         icon: const Icon(
@@ -438,17 +430,6 @@ class MyRecipesView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Title
-                GestureDetector(
-                  onTap: () => controller.viewRecipe(recipe),
-                  child: Text(
-                    recipe.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D2D2D),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 6),
 
                 // Description

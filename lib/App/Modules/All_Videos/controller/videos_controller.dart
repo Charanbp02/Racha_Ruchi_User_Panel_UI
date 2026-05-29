@@ -147,12 +147,12 @@ class VideosController extends GetxController {
     print('🎬 Playing video: ${video.title}');
     print('📹 Video URL: ${video.videoUrl}');
 
-    // Update view count in background
-    _firestore
-        .collection('recipe_videos')
-        .doc(video.id)
-        .update({'views': FieldValue.increment(1)})
-        .catchError((e) => print('Error updating views: $e'));
+    void playVideo(VideoModel video) {
+      print('🎬 Playing video: ${video.title}');
+      print('📹 Video URL: ${video.videoUrl}');
+
+      Get.toNamed('/video-player', arguments: video);
+    }
 
     Get.toNamed('/video-player', arguments: video);
   }
@@ -181,26 +181,12 @@ class VideosController extends GetxController {
       if (likeDoc.exists) {
         await likeRef.delete();
         await videoRef.update({'likes': FieldValue.increment(-1)});
-        Get.snackbar(
-          'Removed Like',
-          'You unliked this video',
-          backgroundColor: Colors.grey,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 1),
-        );
       } else {
         await likeRef.set({
           'userId': user.uid,
           'createdAt': FieldValue.serverTimestamp(),
         });
         await videoRef.update({'likes': FieldValue.increment(1)});
-        Get.snackbar(
-          'Liked!',
-          'You liked this video',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 1),
-        );
       }
     } catch (e) {
       print('Error liking video: $e');
@@ -220,6 +206,39 @@ class VideosController extends GetxController {
               .get();
       return likeDoc.exists;
     } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> reportVideo({
+    required VideoModel video,
+    required String reason,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) return false;
+
+      await _firestore.collection('reports').add({
+        'videoId': video.id,
+        'videoTitle': video.title,
+        'reason': reason,
+        'reportedBy': user.uid,
+        'reportedAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+
+      return true;
+    } catch (e) {
+      print('❌ Report Error: $e');
+
+      Get.snackbar(
+        'Error',
+        'Failed to report video',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
       return false;
     }
   }

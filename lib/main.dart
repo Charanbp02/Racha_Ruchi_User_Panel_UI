@@ -1,5 +1,5 @@
-// main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -12,26 +12,34 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize MediaKit (MUST be called before any video playback)
+  // Load .env file safely
+  try {
+    await dotenv.load();
+    debugPrint('✅ .env file loaded successfully');
+  } catch (e) {
+    debugPrint('⚠️ .env file not found: $e');
+    debugPrint(
+      'Continuing without .env file. Use hardcoded keys or add .env file.',
+    );
+  }
+
+  // Media Kit
   MediaKit.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp();
+  // Firebase Initialize (ONLY ONCE)
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Initialize Hive for caching
+  // Hive Initialize
   await Hive.initFlutter();
   await Hive.openBox('video_metadata');
 
-  // Initialize Firebase with options
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // Test Firebase Storage connection
+  // Firebase Storage Test
   try {
     final storage = FirebaseStorage.instance;
     await storage.ref().child('test').list();
-    print('✅ Firebase Storage connected successfully');
+    debugPrint('✅ Firebase Storage connected successfully');
   } catch (e) {
-    print('❌ Firebase Storage error: $e');
+    debugPrint('❌ Firebase Storage error: $e');
   }
 
   runApp(const MyApp());
@@ -45,7 +53,6 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Racha Ruchi',
-
       theme: ThemeData(
         fontFamily: 'Poppins',
         scaffoldBackgroundColor: Colors.white,
@@ -55,7 +62,6 @@ class MyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: Color(0xFF2D2D2D)),
         ),
       ),
-
       initialRoute: AppRoutes.INITIAL,
       getPages: AppPages.routes,
     );

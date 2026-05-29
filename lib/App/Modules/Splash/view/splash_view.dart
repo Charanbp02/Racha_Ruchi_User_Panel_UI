@@ -31,7 +31,10 @@ class SplashView extends StatelessWidget {
                   gradient: RadialGradient(
                     center: Alignment.center,
                     radius: 1.5,
-                    colors: [Colors.white.withOpacity(0.1), Colors.transparent],
+                    colors: [
+                      Colors.white.withValues(alpha: 0.1),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
               ),
@@ -50,10 +53,10 @@ class SplashView extends StatelessWidget {
                     height: bubble.size,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withValues(alpha: 0.1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),
@@ -86,7 +89,7 @@ class SplashView extends StatelessWidget {
                             height: 200,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha: 0.15),
                             ),
                           ),
                         ),
@@ -103,7 +106,7 @@ class SplashView extends StatelessWidget {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.white.withOpacity(0.5),
+                                color: Colors.white.withValues(alpha: 0.5),
                                 blurRadius: 40,
                                 spreadRadius: 10,
                               ),
@@ -131,7 +134,7 @@ class SplashView extends StatelessWidget {
                               borderRadius: BorderRadius.circular(35),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
+                                  color: Colors.black.withValues(alpha: 0.3),
                                   blurRadius: 25,
                                   spreadRadius: 5,
                                   offset: const Offset(0, 10),
@@ -153,7 +156,9 @@ class SplashView extends StatelessWidget {
                                         child: Container(
                                           width: 65,
                                           height: 130,
-                                          color: Colors.white.withOpacity(0.3),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.3,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -174,8 +179,8 @@ class SplashView extends StatelessWidget {
                                           letterSpacing: 4,
                                           shadows: [
                                             Shadow(
-                                              color: Colors.black.withOpacity(
-                                                0.2,
+                                              color: Colors.black.withValues(
+                                                alpha: 0.2,
                                               ),
                                               blurRadius: 10,
                                               offset: const Offset(2, 2),
@@ -187,7 +192,9 @@ class SplashView extends StatelessWidget {
                                         width: 50,
                                         height: 2,
                                         margin: const EdgeInsets.only(top: 4),
-                                        color: Colors.white.withOpacity(0.8),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.8,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                     ],
@@ -233,7 +240,7 @@ class SplashView extends StatelessWidget {
                                 letterSpacing: 3,
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.3),
+                                    color: Colors.black.withValues(alpha: 0.3),
                                     blurRadius: 10,
                                     offset: const Offset(2, 2),
                                   ),
@@ -256,10 +263,10 @@ class SplashView extends StatelessWidget {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(30),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -298,13 +305,13 @@ class SplashView extends StatelessWidget {
                                 gradient: LinearGradient(
                                   colors: [
                                     Colors.white,
-                                    Colors.white.withOpacity(0.6),
+                                    Colors.white.withValues(alpha: 0.6),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.white.withOpacity(0.5),
+                                    color: Colors.white.withValues(alpha: 0.5),
                                     blurRadius: 8,
                                     spreadRadius: 0,
                                   ),
@@ -325,9 +332,9 @@ class SplashView extends StatelessWidget {
                           value: controller.dotProgress.value,
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white.withOpacity(0.8),
+                            Colors.white.withValues(alpha: 0.8),
                           ),
-                          backgroundColor: Colors.white.withOpacity(0.2),
+                          backgroundColor: Colors.white.withValues(alpha: 0.2),
                         ),
                       ),
                     ],
@@ -345,7 +352,7 @@ class SplashView extends StatelessWidget {
                 height: 150,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                 ),
               ),
             ),
@@ -357,7 +364,7 @@ class SplashView extends StatelessWidget {
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.03),
+                  color: Colors.white.withValues(alpha: 0.03),
                 ),
               ),
             ),

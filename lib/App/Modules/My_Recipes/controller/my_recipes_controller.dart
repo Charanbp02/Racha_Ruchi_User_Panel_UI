@@ -60,7 +60,6 @@ class MyRecipesController extends GetxController {
     isLoading.value = true;
 
     try {
-      // Cancel existing subscription
       _recipesSubscription?.cancel();
 
       // Real-time listener for user's recipe videos
@@ -73,9 +72,17 @@ class MyRecipesController extends GetxController {
             (snapshot) {
               final List<RecipeModel> recipes = [];
 
+              print(
+                '📱 Found ${snapshot.docs.length} videos for user ${user.uid}',
+              );
+
               for (var doc in snapshot.docs) {
                 final data = doc.data();
                 try {
+                  // Debug: Print each document
+                  print('Processing video: ${doc.id}');
+                  print('Video data: $data');
+
                   final recipe = RecipeModel(
                     id: doc.id,
                     title: data['title'] ?? 'Untitled Recipe',
@@ -86,35 +93,25 @@ class MyRecipesController extends GetxController {
                     difficulty: 'Medium',
                     likes: (data['likes'] ?? 0).toString(),
                     comments: (data['comments'] ?? 0).toString(),
-                    status: data['isActive'] == true ? 'Published' : 'Draft',
-                    createdAt:
-                        data['createdAt'] != null
-                            ? (data['createdAt'] as Timestamp)
-                                .toDate()
-                                .toString()
-                                .split(' ')[0]
-                            : DateTime.now().toString().split(' ')[0],
-                    cuisine: data['category'] ?? 'Indian',
-                    category: data['category'] ?? 'Veg',
+                    status: _getStatusFromData(data),
+                    createdAt: _formatDate(data['createdAt']),
+                    cuisine:
+                        data['category'] ?? data['categoryName'] ?? 'Indian',
+                    category: data['category'] ?? data['categoryName'] ?? 'Veg',
                     userId: data['userId'] ?? '',
                     videoUrl: data['videoUrl'] ?? '',
                     tags: List<String>.from(data['tags'] ?? []),
-                    ingredients: List<Map<String, String>>.from(
-                      data['ingredients'] ?? [],
-                    ),
+                    ingredients: _parseIngredients(data['ingredients']),
                     likesCount: data['likes'] ?? 0,
                     commentsCount: data['comments'] ?? 0,
                     viewsCount: data['views'] ?? 0,
-                    updatedAt:
-                        data['updatedAt'] != null
-                            ? (data['updatedAt'] as Timestamp).toDate()
-                            : DateTime.now(),
+                    updatedAt: _parseTimestamp(data['updatedAt']),
                     isActive: data['isActive'] ?? true,
-                    isFavorite: data['isFavorite'] ?? false,
                   );
                   recipes.add(recipe);
                 } catch (e) {
                   print('Error parsing recipe ${doc.id}: $e');
+                  print('Data that caused error: ${doc.data()}');
                 }
               }
 
@@ -122,19 +119,85 @@ class MyRecipesController extends GetxController {
               applyFilters();
               isLoading.value = false;
 
-              print('📱 Loaded ${recipes.length} videos for user ${user.uid}');
+              print('✅ Loaded ${recipes.length} videos for user ${user.uid}');
             },
             onError: (error) {
-              print('Error loading recipes: $error');
+              print('❌ Error loading recipes: $error');
               isLoading.value = false;
-              _showErrorSnackbar('Failed to load recipes');
+              _showErrorSnackbar('Failed to load recipes: $error');
             },
           );
     } catch (e) {
-      print('Error setting up listener: $e');
+      print('❌ Error setting up listener: $e');
       isLoading.value = false;
       _showErrorSnackbar('Failed to load recipes');
     }
+  }
+
+  String _getStatusFromData(Map<String, dynamic> data) {
+    // Check if video is active/published
+    if (data['isActive'] == true) {
+      return 'Published';
+    }
+    return 'Draft';
+  }
+
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) {
+      return DateTime.now().toString().split(' ')[0];
+    }
+
+    try {
+      if (timestamp is Timestamp) {
+        return timestamp.toDate().toString().split(' ')[0];
+      } else if (timestamp is DateTime) {
+        return timestamp.toString().split(' ')[0];
+      }
+    } catch (e) {
+      print('Error formatting date: $e');
+    }
+
+    return DateTime.now().toString().split(' ')[0];
+  }
+
+  DateTime _parseTimestamp(dynamic timestamp) {
+    if (timestamp == null) {
+      return DateTime.now();
+    }
+
+    try {
+      if (timestamp is Timestamp) {
+        return timestamp.toDate();
+      } else if (timestamp is DateTime) {
+        return timestamp;
+      }
+    } catch (e) {
+      print('Error parsing timestamp: $e');
+    }
+
+    return DateTime.now();
+  }
+
+  List<Map<String, String>> _parseIngredients(dynamic ingredientsData) {
+    if (ingredientsData == null) return [];
+
+    try {
+      if (ingredientsData is List) {
+        return ingredientsData.map((ing) {
+          if (ing is Map) {
+            return {
+              'name': ing['name']?.toString() ?? '',
+              'quantity': ing['quantity']?.toString() ?? '',
+            };
+          }
+          return {'name': '', 'quantity': ''};
+        }).toList();
+      }
+    } catch (e) {
+      print('Error parsing ingredients: $e');
+    }
+
+    return [];
   }
 
   void applyFilters() {
@@ -165,6 +228,7 @@ class MyRecipesController extends GetxController {
     }
 
     filteredRecipes.value = filtered;
+    print('🔍 Filter applied: ${filtered.length} recipes shown');
   }
 
   void setFilter(String filter) {
@@ -197,8 +261,23 @@ class MyRecipesController extends GetxController {
               Get.back();
 
               try {
+                // First, get the video document to access videoUrl
+                final doc =
+                    await _firestore.collection('recipe_videos').doc(id).get();
+                final videoUrl = doc.data()?['videoUrl'];
+
                 // Delete from Firestore
                 await _firestore.collection('recipe_videos').doc(id).delete();
+
+                // Optional: Delete video from Storage if needed
+                // if (videoUrl != null && videoUrl.isNotEmpty) {
+                //   try {
+                //     final storageRef = FirebaseStorage.instance.refFromURL(videoUrl);
+                //     await storageRef.delete();
+                //   } catch (e) {
+                //     print('Error deleting video from storage: $e');
+                //   }
+                // }
 
                 Get.snackbar(
                   'Deleted',
@@ -208,9 +287,10 @@ class MyRecipesController extends GetxController {
                   colorText: Colors.white,
                 );
               } catch (e) {
+                print('Error deleting recipe: $e');
                 Get.snackbar(
                   'Error',
-                  'Failed to delete recipe video',
+                  'Failed to delete recipe video: $e',
                   snackPosition: SnackPosition.BOTTOM,
                   backgroundColor: Colors.red,
                   colorText: Colors.white,
@@ -230,17 +310,8 @@ class MyRecipesController extends GetxController {
     );
   }
 
-  void editRecipe(RecipeModel recipe) {
-    Get.toNamed('/edit-recipe', arguments: recipe);
-  }
-
-  void viewRecipe(RecipeModel recipe) {
-    _incrementViewCount(recipe.id);
-    Get.toNamed('/recipe-detail', arguments: recipe);
-  }
-
   void addNewRecipe() {
-    Get.toNamed('/add-recipe');
+    Get.toNamed('/upload-video', arguments: {'uploadType': 'recipe'});
   }
 
   Future<void> _incrementViewCount(String id) async {

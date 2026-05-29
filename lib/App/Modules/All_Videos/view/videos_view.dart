@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Models/Video_Model/video_model.dart';
 import 'package:racharuchi/App/Modules/All_Videos/controller/videos_controller.dart';
+import 'package:share_plus/share_plus.dart';
 
 class VideosView extends StatelessWidget {
   VideosView({super.key, this.embedded = false});
@@ -44,6 +45,30 @@ class VideosView extends StatelessWidget {
         },
       );
     });
+  }
+
+  Widget _reportOption({
+    required String title,
+    required String reason,
+    required VideoModel video,
+    required VideosController controller,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title, style: GoogleFonts.poppins(fontSize: 14)),
+      onTap: () async {
+        Get.back();
+
+        await controller.reportVideo(video: video, reason: reason);
+
+        Get.snackbar(
+          'Reported',
+          'Thanks for your feedback',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      },
+    );
   }
 
   Widget _buildVideoCard(VideoModel video, VideosController controller) {
@@ -102,7 +127,7 @@ class VideosView extends StatelessWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.8),
+                      color: Colors.black.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -130,7 +155,6 @@ class VideosView extends StatelessWidget {
                     radius: 20,
                     backgroundImage: NetworkImage(video.channelAvatar),
                     onBackgroundImageError: (_, __) {},
-                    child: const Icon(Iconsax.user, size: 20),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -275,12 +299,98 @@ class VideosView extends StatelessWidget {
               ListTile(
                 leading: const Icon(Iconsax.share, color: Colors.black87),
                 title: const Text('Share'),
-                onTap: () => Get.back(),
+                onTap: () async {
+                  Get.back();
+
+                  try {
+                    await Share.share('''
+🎥 ${video.title}
+
+👨‍🍳 Channel: ${video.channelName}
+
+${video.description}
+
+Watch Video:
+${video.videoUrl}
+''');
+                  } catch (e) {
+                    Get.snackbar(
+                      'Error',
+                      'Unable to share video',
+                      backgroundColor: Colors.red,
+                      colorText: Colors.white,
+                    );
+                  }
+                },
               ),
+
               ListTile(
                 leading: const Icon(Iconsax.message, color: Colors.black87),
                 title: const Text('Report'),
-                onTap: () => Get.back(),
+                onTap: () {
+                  Get.back();
+
+                  Get.bottomSheet(
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(20),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Report Video',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          _reportOption(
+                            title: 'Spam or misleading',
+                            reason: 'spam',
+                            video: video,
+                            controller: controller,
+                          ),
+
+                          _reportOption(
+                            title: 'Violence content',
+                            reason: 'violence',
+                            video: video,
+                            controller: controller,
+                          ),
+
+                          _reportOption(
+                            title: 'Hateful content',
+                            reason: 'hate',
+                            video: video,
+                            controller: controller,
+                          ),
+
+                          _reportOption(
+                            title: 'Sexual content',
+                            reason: 'sexual',
+                            video: video,
+                            controller: controller,
+                          ),
+
+                          _reportOption(
+                            title: 'Other',
+                            reason: 'other',
+                            video: video,
+                            controller: controller,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 8),
             ],

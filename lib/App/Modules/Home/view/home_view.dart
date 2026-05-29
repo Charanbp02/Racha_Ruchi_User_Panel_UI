@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Custom/appBar.dart';
@@ -7,6 +8,8 @@ import 'package:racharuchi/App/Modules/Banner/view/hero_banner_view.dart';
 import 'package:racharuchi/App/Modules/Categories/view/category_view.dart';
 import 'package:racharuchi/App/Modules/Home/Controller/Home_Controller.dart';
 import 'package:racharuchi/App/Modules/Search/view/search_bar_view.dart';
+import 'package:racharuchi/App/Modules/AIChat/view/ai_chat_view.dart';
+import 'package:racharuchi/App/Modules/AIChat/binding/ai_chat_binding.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
@@ -45,19 +48,20 @@ class HomeView extends GetView<HomeController> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Add your AI functionality here
-          Get.snackbar(
-            'AI Assistant',
-            'AI feature coming soon!',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.black87,
-            colorText: Colors.white,
-            icon: const Icon(Iconsax.cpu, color: Colors.white),
-            duration: const Duration(seconds: 2),
+          // Add haptic feedback for better UX
+          HapticFeedback.lightImpact();
+
+          // Navigate to AI Chat
+          Get.to(
+            () => const AIChatView(),
+            binding: AIChatBinding(),
+            transition: Transition.rightToLeft,
+            duration: const Duration(milliseconds: 300),
           );
         },
         backgroundColor: const Color(0xFFE53935),
         elevation: 4,
+        tooltip: 'AI Recipe Assistant',
         child: const Icon(Iconsax.magicpen, color: Colors.white, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

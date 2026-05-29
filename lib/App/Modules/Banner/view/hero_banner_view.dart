@@ -110,11 +110,11 @@ class _HeroBannerViewState extends State<HeroBannerView>
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
@@ -144,11 +144,11 @@ class _HeroBannerViewState extends State<HeroBannerView>
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
@@ -197,7 +197,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
             spreadRadius: 1,
@@ -252,8 +252,8 @@ class _HeroBannerViewState extends State<HeroBannerView>
                   colors: [
                     Colors.transparent,
                     Colors.transparent,
-                    Colors.black.withOpacity(0.5),
-                    Colors.black.withOpacity(0.85),
+                    Colors.black.withValues(alpha: 0.5),
+                    Colors.black.withValues(alpha: 0.85),
                   ],
                   stops: const [0.0, 0.5, 0.7, 1.0],
                 ),
@@ -281,7 +281,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFD32F2F).withOpacity(0.3),
+                          color: const Color(0xFFD32F2F).withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -333,7 +333,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
                   Text(
                     banner.subtitle,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white.withValues(alpha: 0.95),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       height: 1.3,
@@ -371,7 +371,7 @@ class _HeroBannerViewState extends State<HeroBannerView>
                             colors: [Color(0xFFD32F2F), Color(0xFFE53935)],
                           )
                           : null,
-                  color: isActive ? null : Colors.grey.withOpacity(0.4),
+                  color: isActive ? null : Colors.grey.withValues(alpha: 0.4),
                 ),
               );
             }).toList(),

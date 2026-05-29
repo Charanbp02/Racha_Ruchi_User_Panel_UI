@@ -392,8 +392,8 @@ class ProfileView extends StatelessWidget {
                     decoration: BoxDecoration(
                       color:
                           isLogout
-                              ? Colors.red.withOpacity(0.1)
-                              : const Color(0xFFE53935).withOpacity(0.1),
+                              ? Colors.red.withValues(alpha: 0.1)
+                              : const Color(0xFFE53935).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -574,7 +574,7 @@ class ProfileView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withOpacity(0.1),
+              color: const Color(0xFFE53935).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, size: 28, color: const Color(0xFFE53935)),

@@ -1,6 +1,10 @@
 // lib/App/Modules/VideoPlayer/controller/video_player_controller.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:racharuchi/App/Modules/VideoPlayer/view/comments_bottom_sheet.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,8 +22,11 @@ class VideoPlayerControllerX extends GetxController {
   final isLiked = false.obs;
   final likeCount = 0.obs;
   final commentCount = 0.obs;
+  final viewsCount = 0.obs;
   final isFollowing = false.obs;
   final followerCount = 0.obs;
+  final isFollowingLoading = false.obs;
+  final hasViewed = false.obs;
 
   final String videoUrl;
   final String videoTitle;
@@ -30,8 +37,19 @@ class VideoPlayerControllerX extends GetxController {
   final List<dynamic> ingredients;
   final String userId;
 
+  final animateLike = false.obs;
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  bool _isDisposed = false;
+
+  // ✅ ADD THIS PUBLIC GETTER
+  String? get currentUserId => _auth.currentUser?.uid;
+
+  // ✅ ADDED: Stream subscriptions for real-time updates
+  StreamSubscription<DocumentSnapshot>? _followSubscription;
+  StreamSubscription<DocumentSnapshot>? _followerCountSubscription;
 
   VideoPlayerControllerX({
     required this.videoUrl,
@@ -47,10 +65,6 @@ class VideoPlayerControllerX extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    print('🎬 VideoPlayerControllerX initialized');
-    print(
-      '📹 Received videoUrl: ${videoUrl.isNotEmpty ? videoUrl.substring(0, videoUrl.length > 80 ? 80 : videoUrl.length) : 'EMPTY'}',
-    );
     _initializeAndPlay();
     _fetchData();
   }
@@ -76,7 +90,7 @@ class VideoPlayerControllerX extends GetxController {
       isLoading.value = false;
 
       videoController!.addListener(() {
-        if (videoController!.value.isInitialized) {
+        if (!_isDisposed && videoController!.value.isInitialized) {
           position.value = videoController!.value.position;
           isPlaying.value = videoController!.value.isPlaying;
         }
@@ -86,11 +100,12 @@ class VideoPlayerControllerX extends GetxController {
       await videoController!.play();
       isPlaying.value = true;
 
+      _setupViewTracking();
+
       Future.delayed(const Duration(seconds: 3), () {
-        if (isPlaying.value) showControls.value = false;
+        if (!_isDisposed && isPlaying.value) showControls.value = false;
       });
 
-      await _incrementViewCount();
       update();
     } catch (e) {
       print('❌ Video Player Error: $e');
@@ -99,13 +114,56 @@ class VideoPlayerControllerX extends GetxController {
     }
   }
 
-  Future<void> _incrementViewCount() async {
+  void _setupViewTracking() {
+    if (videoController == null) return;
+
+    videoController!.addListener(() {
+      if (!_isDisposed &&
+          !hasViewed.value &&
+          videoController!.value.isInitialized) {
+        final videoDuration = duration.value;
+        final currentPosition = position.value;
+
+        if (currentPosition.inSeconds >= 30 ||
+            (videoDuration.inSeconds > 0 &&
+                currentPosition.inSeconds >= videoDuration.inSeconds ~/ 2)) {
+          _incrementUniqueViewCount();
+        }
+      }
+    });
+  }
+
+  Future<void> _incrementUniqueViewCount() async {
+    if (hasViewed.value || _isDisposed) return;
+
+    final user = _auth.currentUser;
+    if (user == null) return;
+
     try {
-      await _firestore.collection('recipe_videos').doc(videoId).update({
-        'views': FieldValue.increment(1),
-      });
+      final viewRef = _firestore
+          .collection('recipe_videos')
+          .doc(videoId)
+          .collection('views')
+          .doc(user.uid);
+
+      final viewDoc = await viewRef.get();
+
+      if (!viewDoc.exists) {
+        await viewRef.set({
+          'userId': user.uid,
+          'viewedAt': FieldValue.serverTimestamp(),
+          'userEmail': user.email,
+        });
+
+        await _firestore.collection('recipe_videos').doc(videoId).update({
+          'views': FieldValue.increment(1),
+        });
+
+        hasViewed.value = true;
+        viewsCount.value++;
+      }
     } catch (e) {
-      print('Error incrementing views: $e');
+      print('Error incrementing unique view: $e');
     }
   }
 
@@ -116,13 +174,13 @@ class VideoPlayerControllerX extends GetxController {
     return 'Failed to load video. Please try again.';
   }
 
+  // ✅ UPDATED: _fetchData with realtime listeners
   Future<void> _fetchData() async {
-    await Future.wait([
-      fetchVideoStats(),
-      fetchUserStats(),
-      checkIfLiked(),
-      checkIfFollowing(),
-    ]);
+    await Future.wait([fetchVideoStats(), checkIfLiked()]);
+
+    // Start realtime listeners
+    checkIfFollowing();
+    listenFollowerCount();
   }
 
   Future<void> fetchVideoStats() async {
@@ -133,21 +191,10 @@ class VideoPlayerControllerX extends GetxController {
         final data = doc.data() as Map<String, dynamic>;
         likeCount.value = data['likes'] ?? 0;
         commentCount.value = data['comments'] ?? 0;
+        viewsCount.value = data['views'] ?? 0;
       }
     } catch (e) {
       print('Error fetching stats: $e');
-    }
-  }
-
-  Future<void> fetchUserStats() async {
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>;
-        followerCount.value = data['followerCount'] ?? 0;
-      }
-    } catch (e) {
-      followerCount.value = 0;
     }
   }
 
@@ -168,85 +215,166 @@ class VideoPlayerControllerX extends GetxController {
     }
   }
 
-  Future<void> checkIfFollowing() async {
+  // ✅ REPLACED: Real-time follow status listener
+  void checkIfFollowing() {
     final user = _auth.currentUser;
-    if (user == null || userId == user.uid) return;
-    try {
-      final followDoc =
-          await _firestore
-              .collection('users')
-              .doc(userId)
-              .collection('followers')
-              .doc(user.uid)
-              .get();
-      isFollowing.value = followDoc.exists;
-    } catch (e) {
-      print('Error checking follow status: $e');
+
+    if (user == null || user.uid == userId) {
+      isFollowing.value = false;
+      return;
     }
+
+    // Cancel existing subscription
+    _followSubscription?.cancel();
+
+    // Start realtime listener
+    _followSubscription = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('followers')
+        .doc(user.uid)
+        .snapshots()
+        .listen(
+          (doc) {
+            if (!_isDisposed) {
+              isFollowing.value = doc.exists;
+              print('📡 Real-time follow status updated: ${doc.exists}');
+            }
+          },
+          onError: (error) {
+            print('❌ Follow status listener error: $error');
+            isFollowing.value = false;
+          },
+        );
   }
 
+  // ✅ ADDED: Real-time follower count listener
+  void listenFollowerCount() {
+    // Cancel existing subscription
+    _followerCountSubscription?.cancel();
+
+    // Start realtime listener for follower count
+    _followerCountSubscription = _firestore
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .listen(
+          (doc) {
+            if (!_isDisposed && doc.exists) {
+              final newCount = doc.data()?['followerCount'] ?? 0;
+              followerCount.value = newCount;
+              print('📡 Real-time follower count updated: $newCount');
+            }
+          },
+          onError: (error) {
+            print('❌ Follower count listener error: $error');
+          },
+        );
+  }
+
+  // ✅ SIMPLIFIED: toggleFollow without manual UI updates
   Future<void> toggleFollow() async {
+    if (isFollowingLoading.value) return;
+
     final user = _auth.currentUser;
+
     if (user == null) {
       Get.snackbar(
         'Login Required',
-        'Please login to follow',
+        'Please login first',
         backgroundColor: Colors.orange,
         colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
 
-    if (userId == user.uid) {
+    if (user.uid == userId) {
       Get.snackbar(
         'Info',
         'You cannot follow yourself',
         backgroundColor: Colors.blue,
         colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
 
     try {
-      final userRef = _firestore.collection('users').doc(userId);
-      final followRef = userRef.collection('followers').doc(user.uid);
-      final followDoc = await followRef.get();
+      isFollowingLoading.value = true;
 
-      if (followDoc.exists) {
-        await followRef.delete();
-        await userRef.update({'followerCount': FieldValue.increment(-1)});
-        isFollowing.value = false;
-        followerCount.value--;
+      final targetUserRef = _firestore.collection('users').doc(userId);
+      final followerRef = targetUserRef.collection('followers').doc(user.uid);
+      final currentUserRef = _firestore.collection('users').doc(user.uid);
+      final followingRef = currentUserRef.collection('following').doc(userId);
+
+      final followerDoc = await followerRef.get();
+
+      if (followerDoc.exists) {
+        // UNFOLLOW
+        await followerRef.delete();
+        await followingRef.delete();
+        await targetUserRef.update({'followerCount': FieldValue.increment(-1)});
+
+        // ❌ REMOVED manual UI updates - realtime listener will handle
+        // isFollowing.value = false;
+        // followerCount.value--;
+
         Get.snackbar(
           'Unfollowed',
           'You unfollowed $channelName',
           backgroundColor: Colors.grey,
           colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 1),
         );
       } else {
-        await followRef.set({
+        // FOLLOW
+        await followerRef.set({
           'followerId': user.uid,
-          'followerName': user.displayName ?? 'User',
-          'followerImage': user.photoURL ?? '',
+          'userName': user.displayName ?? 'User',
+          'userImage': user.photoURL ?? '',
           'createdAt': FieldValue.serverTimestamp(),
         });
-        await userRef.update({'followerCount': FieldValue.increment(1)});
-        isFollowing.value = true;
-        followerCount.value++;
+
+        await followingRef.set({
+          'followingId': userId,
+          'followingName': channelName,
+          'followingImage': channelImage,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        await targetUserRef.update({'followerCount': FieldValue.increment(1)});
+
+        // ❌ REMOVED manual UI updates - realtime listener will handle
+        // isFollowing.value = true;
+        // followerCount.value++;
+
         Get.snackbar(
           'Following',
           'You are now following $channelName',
           backgroundColor: Colors.green,
           colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 1),
         );
       }
     } catch (e) {
-      print('Error toggling follow: $e');
+      print('FOLLOW ERROR: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to follow/unfollow',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isFollowingLoading.value = false;
     }
   }
 
   void playPause() {
-    if (!isInitialized.value || videoController == null) return;
+    if (!isInitialized.value || videoController == null || _isDisposed) return;
     if (videoController!.value.isPlaying) {
       videoController!.pause();
       isPlaying.value = false;
@@ -255,14 +383,14 @@ class VideoPlayerControllerX extends GetxController {
       videoController!.play();
       isPlaying.value = true;
       Future.delayed(const Duration(seconds: 3), () {
-        if (isPlaying.value) showControls.value = false;
+        if (!_isDisposed && isPlaying.value) showControls.value = false;
       });
     }
     update();
   }
 
   void forward10Seconds() {
-    if (!isInitialized.value || videoController == null) return;
+    if (!isInitialized.value || videoController == null || _isDisposed) return;
     final newPosition = position.value + const Duration(seconds: 10);
     if (newPosition < duration.value) {
       videoController!.seekTo(newPosition);
@@ -275,7 +403,7 @@ class VideoPlayerControllerX extends GetxController {
   }
 
   void rewind10Seconds() {
-    if (!isInitialized.value || videoController == null) return;
+    if (!isInitialized.value || videoController == null || _isDisposed) return;
     final newPosition = position.value - const Duration(seconds: 10);
     if (newPosition > Duration.zero) {
       videoController!.seekTo(newPosition);
@@ -288,17 +416,19 @@ class VideoPlayerControllerX extends GetxController {
   }
 
   void _showControlOverlay() {
+    if (_isDisposed) return;
     showControls.value = true;
     Future.delayed(const Duration(seconds: 2), () {
-      if (isPlaying.value) showControls.value = false;
+      if (!_isDisposed && isPlaying.value) showControls.value = false;
     });
   }
 
   void toggleControls() {
+    if (_isDisposed) return;
     showControls.value = !showControls.value;
     if (showControls.value && isPlaying.value) {
       Future.delayed(const Duration(seconds: 3), () {
-        if (isPlaying.value) showControls.value = false;
+        if (!_isDisposed && isPlaying.value) showControls.value = false;
       });
     }
   }
@@ -311,6 +441,7 @@ class VideoPlayerControllerX extends GetxController {
         'Please login to like videos',
         backgroundColor: Colors.orange,
         colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
@@ -325,52 +456,196 @@ class VideoPlayerControllerX extends GetxController {
         await videoRef.update({'likes': FieldValue.increment(-1)});
         isLiked.value = false;
         likeCount.value--;
-        Get.snackbar(
-          'Removed Like',
-          'You unliked this video',
-          backgroundColor: Colors.grey,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 1),
-        );
       } else {
         await likeRef.set({
           'userId': user.uid,
+          'userEmail': user.email,
+          'userName': user.displayName,
           'createdAt': FieldValue.serverTimestamp(),
         });
         await videoRef.update({'likes': FieldValue.increment(1)});
         isLiked.value = true;
         likeCount.value++;
-        Get.snackbar(
-          'Liked!',
-          'You liked this video',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 1),
-        );
       }
     } catch (e) {
       print('Error toggling like: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to like video',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
-  void shareVideo() {
-    Get.snackbar(
-      'Share',
-      'Share feature coming soon',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.blue,
-      colorText: Colors.white,
+  Future<void> shareVideo() async {
+    try {
+      String durationText = '';
+      if (duration.value.inHours > 0) {
+        durationText =
+            '${duration.value.inHours}h ${duration.value.inMinutes.remainder(60)}m';
+      } else {
+        durationText = '${duration.value.inMinutes} min';
+      }
+
+      final shareText = '''
+🍲 Check out this recipe video!
+
+📹 $videoTitle
+👨‍🍳 By: $channelName
+⏱️ Duration: $durationText
+👀 Views: ${viewsCount.value.formatNumber()}
+❤️ Likes: ${likeCount.value.formatNumber()}
+
+Watch now in Racha Ruchi App!
+''';
+
+      await Share.share(shareText, subject: videoTitle);
+
+      await _firestore.collection('recipe_videos').doc(videoId).update({
+        'shares': FieldValue.increment(1),
+      });
+
+      Get.snackbar(
+        'Success',
+        'Shared successfully!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 1),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      print('Error sharing: $e');
+      Get.snackbar(
+        'Error',
+        'Could not share video',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  Future<bool> reportVideo({required String reason}) async {
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) {
+        Get.snackbar(
+          'Login Required',
+          'Please login first',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return false;
+      }
+
+      await _firestore.collection('reports').add({
+        'videoId': videoId,
+        'videoTitle': videoTitle,
+        'reason': reason,
+        'reportedBy': user.uid,
+        'reportedByEmail': user.email,
+        'reportedAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+
+      return true;
+    } catch (e) {
+      print('❌ Report Error: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to report video',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    }
+  }
+
+  Widget _reportOption({required String title, required String reason}) {
+    return ListTile(
+      leading: const Icon(Iconsax.warning_2, color: Colors.red),
+      title: Text(title),
+      onTap: () async {
+        Get.back();
+        final success = await reportVideo(reason: reason);
+        if (success) {
+          Get.snackbar(
+            'Reported',
+            'Thanks for your feedback. We will review it.',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 2),
+          );
+        }
+      },
+    );
+  }
+
+  void reportVideoBottomSheet() {
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Report Video',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            _reportOption(title: 'Spam or misleading', reason: 'spam'),
+            _reportOption(title: 'Violent content', reason: 'violence'),
+            _reportOption(title: 'Hateful content', reason: 'hate'),
+            _reportOption(title: 'Sexual content', reason: 'sexual'),
+            _reportOption(title: 'Copyright issue', reason: 'copyright'),
+            _reportOption(title: 'Other', reason: 'other'),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+      backgroundColor: Colors.transparent,
     );
   }
 
   void openComments() {
-    Get.toNamed(
-      '/comments',
-      arguments: {
-        'videoId': videoId,
-        'videoTitle': videoTitle,
-        'commentCount': commentCount.value,
-      },
+    showModalBottomSheet(
+      context: Get.context!,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder:
+                (_, scrollController) => Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: CommentsBottomSheet(
+                    videoId: videoId,
+                    videoTitle: videoTitle,
+                    commentCount: commentCount.value,
+                    scrollController: scrollController,
+                    onCommentCountChanged: (newCount) {
+                      commentCount.value = newCount;
+                    },
+                  ),
+                ),
+          ),
     );
   }
 
@@ -382,14 +657,27 @@ class VideoPlayerControllerX extends GetxController {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
+    if (duration.inHours > 0) {
+      final hours = twoDigits(duration.inHours);
+      return '$hours:$minutes:$seconds';
+    }
     return '$minutes:$seconds';
   }
 
+  // ✅ UPDATED: Dispose all subscriptions
   @override
   void onClose() {
+    _isDisposed = true;
+
+    // Cancel stream subscriptions
+    _followSubscription?.cancel();
+    _followerCountSubscription?.cancel();
+
+    // Dispose video controller
     if (videoController != null) {
       videoController!.dispose();
     }
+
     super.onClose();
   }
 }

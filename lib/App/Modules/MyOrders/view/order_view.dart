@@ -106,7 +106,9 @@ class OrderView extends StatelessWidget {
                     isSelected
                         ? [
                           BoxShadow(
-                            color: const Color(0xFFE53935).withOpacity(0.3),
+                            color: const Color(
+                              0xFFE53935,
+                            ).withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -186,7 +188,7 @@ class OrderView extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
