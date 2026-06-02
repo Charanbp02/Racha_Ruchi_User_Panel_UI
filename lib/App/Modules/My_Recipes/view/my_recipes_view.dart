@@ -30,106 +30,179 @@ class MyRecipesView extends StatelessWidget {
           icon: const Icon(Iconsax.arrow_left, color: Color(0xFF2D2D2D)),
           onPressed: () => Get.back(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.add, color: Color(0xFFE53935)),
-            onPressed: () => controller.addNewRecipe(),
-          ),
-        ],
       ),
-      body: Obx(() {
-        // Check authentication
-        if (!controller.isAuthenticated.value) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE53935).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Iconsax.lock,
-                    size: 60,
-                    color: Color(0xFFE53935),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Login Required',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2D2D),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Please login to view your recipe videos',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Get.toNamed('/login'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+      body: Stack(
+        children: [
+          Obx(() {
+            // Check authentication
+            if (!controller.isAuthenticated.value) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE53935).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Iconsax.lock,
+                        size: 60,
+                        color: Color(0xFFE53935),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 12,
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Login Required',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2D2D2D),
+                      ),
                     ),
-                  ),
-                  child: const Text('Login Now'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Show loading state
-        if (controller.isLoading.value && controller.myRecipes.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFFE53935)),
-          );
-        }
-
-        return Column(
-          children: [
-            // Search Bar
-            _buildSearchBar(controller),
-            const SizedBox(height: 12),
-
-            // Filter Chips
-            _buildFilterChips(controller),
-            const SizedBox(height: 12),
-
-            // Recipes Count
-            _buildRecipesCount(controller),
-
-            // Recipes List
-            Expanded(
-              child:
-                  controller.filteredRecipes.isEmpty
-                      ? _buildEmptyState(controller)
-                      : RefreshIndicator(
-                        onRefresh: () => controller.refreshData(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: controller.filteredRecipes.length,
-                          itemBuilder: (context, index) {
-                            final recipe = controller.filteredRecipes[index];
-                            return _buildRecipeCard(recipe, controller);
-                          },
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Please login to view your recipe videos',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () => Get.toNamed('/login'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE53935),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
                         ),
                       ),
-            ),
-          ],
-        );
-      }),
+                      child: const Text('Login Now'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // Show loading state
+            if (controller.isLoading.value && controller.myRecipes.isEmpty) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFFE53935)),
+              );
+            }
+
+            return Column(
+              children: [
+                // Search Bar
+                _buildSearchBar(controller),
+                const SizedBox(height: 12),
+
+                // Filter Chips
+                _buildFilterChips(controller),
+                const SizedBox(height: 12),
+
+                // Recipes Count
+                _buildRecipesCount(controller),
+
+                // Recipes List
+                Expanded(
+                  child:
+                      controller.filteredRecipes.isEmpty
+                          ? _buildEmptyState(controller)
+                          : RefreshIndicator(
+                            onRefresh: () => controller.refreshData(),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+
+                              itemCount:
+                                  controller.filteredRecipes.length +
+                                  (controller.isUploading ? 1 : 0),
+
+                              itemBuilder: (context, index) {
+                                if (controller.isUploading && index == 0) {
+                                  return _buildUploadingCard(controller);
+                                }
+
+                                final recipe =
+                                    controller.filteredRecipes[controller
+                                            .isUploading
+                                        ? index - 1
+                                        : index];
+
+                                return _buildRecipeCard(recipe, controller);
+                              },
+                            ),
+                          ),
+                ),
+              ],
+            );
+          }),
+          Obx(() {
+            if (!controller.uploadController.isUploading.value) {
+              return const SizedBox();
+            }
+
+            return Positioned(
+              bottom: 20,
+              left: 16,
+              right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  controller.uploadController.restoreUpload();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.cloud_upload,
+                            color: Color(0xFFE53935),
+                          ),
+                          const SizedBox(width: 10),
+
+                          Expanded(
+                            child: Text(
+                              "Uploading Recipe...",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+
+                          Text(
+                            "${(controller.uploadController.uploadProgress.value * 100).toInt()}%",
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      LinearProgressIndicator(
+                        value: controller.uploadController.uploadProgress.value,
+                        minHeight: 5,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -486,6 +559,40 @@ class MyRecipesView extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadingCard(MyRecipesController controller) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.cloud_upload, color: Color(0xFFE53935)),
+              SizedBox(width: 10),
+              Text(
+                "Uploading Recipe...",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Obx(() => LinearProgressIndicator(value: controller.uploadProgress)),
+
+          const SizedBox(height: 8),
+
+          Obx(() => Text("${(controller.uploadProgress * 100).toInt()}%")),
         ],
       ),
     );

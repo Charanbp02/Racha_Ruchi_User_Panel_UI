@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
@@ -209,38 +210,80 @@ class UploadController extends GetxController {
     }
   }
 
-  // ==================== VIDEO PICKING ====================
-
   Future<void> pickVideo() async {
     try {
+      final status = await Permission.photos.request();
+      final videoStatus = await Permission.videos.request();
+
+      if (!status.isGranted && !videoStatus.isGranted) {
+        Get.snackbar(
+          'Permission Needed',
+          'Please allow gallery access to pick video',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
       final ImagePicker picker = ImagePicker();
+
       final XFile? video = await picker.pickVideo(
         source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5),
+        maxDuration: const Duration(minutes: 25),
       );
 
-      if (video != null) {
-        selectedVideoPath.value = video.path;
+      if (video == null) {
+        print("User cancelled video pick");
+        return;
+      }
+
+      videoPlayerController.value?.dispose();
+      videoPlayerController.value = VideoPlayerController.file(
+        File(video.path),
+      );
+
+      await videoPlayerController.value!.initialize();
+
+      final duration = videoPlayerController.value!.value.duration;
+      final seconds = duration.inSeconds;
+
+      // Minimum 25 seconds
+      if (seconds < 25) {
+        Get.snackbar(
+          'Video Too Short',
+          'Video must be at least 25 seconds',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
 
         videoPlayerController.value?.dispose();
-        videoPlayerController.value = VideoPlayerController.file(
-          File(video.path),
-        );
-        await videoPlayerController.value!.initialize();
-        videoPlayerController.value!.setLooping(true);
-
-        final duration = videoPlayerController.value!.value.duration;
-        videoDurationInSeconds.value = duration.inSeconds;
-        videoDuration.value = _formatDuration(duration);
-
-        videoType.value = 'long';
-        print('🎬 Video type: Long video (${duration.inSeconds}s)');
-
-        await _generateThumbnail(video.path);
+        videoPlayerController.value = null;
+        return;
       }
+
+      // Maximum 25 minutes
+      if (seconds > 1500) {
+        Get.snackbar(
+          'Video Too Long',
+          'Maximum video length is 25 minutes',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+
+        videoPlayerController.value?.dispose();
+        videoPlayerController.value = null;
+        return;
+      }
+
+      // Save video only after validation passes
+      selectedVideoPath.value = video.path;
+
+      videoDurationInSeconds.value = seconds;
+      videoDuration.value = _formatDuration(duration);
+
+      await _generateThumbnail(video.path);
     } catch (e) {
-      print('❌ Pick video error: $e');
-      Get.snackbar('Error', 'Failed to pick video: $e');
+      print("❌ Pick video error: $e");
     }
   }
 
@@ -349,7 +392,7 @@ class UploadController extends GetxController {
       // Use medium quality for better balance
       MediaInfo? mediaInfo = await VideoCompress.compressVideo(
         videoPath,
-        quality: VideoQuality.MediumQuality,
+        quality: VideoQuality.LowQuality,
         deleteOrigin: false,
         includeAudio: true,
       );
@@ -409,14 +452,29 @@ class UploadController extends GetxController {
       }
 
       // Step 1: Compression (0% - 10%)
+      // Step 1: Check file size
       uploadProgress.value = 0.02;
-      print("🎬 Starting video compression...");
 
-      File? compressedVideo = await compressVideo(selectedVideoPath.value);
-      final File videoFile = compressedVideo ?? originalVideo;
+      final originalSizeMB = await originalVideo.length() / (1024 * 1024);
+
+      print("📊 Original size: ${originalSizeMB.toStringAsFixed(2)} MB");
+
+      File videoFile;
+
+      if (originalSizeMB > 80) {
+        print("🎬 Large video detected, compressing...");
+
+        File? compressedVideo = await compressVideo(selectedVideoPath.value);
+
+        videoFile = compressedVideo ?? originalVideo;
+
+        print("✅ Compression complete");
+      } else {
+        print("⚡ Small video detected, skipping compression");
+        videoFile = originalVideo;
+      }
 
       uploadProgress.value = 0.10;
-      print("✅ Compression complete");
 
       // Step 2: Upload video (10% - 60%)
       final videoRef = _storage.ref().child(
@@ -476,38 +534,59 @@ class UploadController extends GetxController {
           ingredients
               .map((ing) => {'name': ing.name, 'quantity': ing.quantity})
               .toList();
+      final title = videoTitle.value.trim();
+      final description = videoDescription.value.trim();
+
+      final keywords = generateSearchKeywords(
+        '$title $description ${selectedTags.join(" ")}',
+      );
 
       final videoData = {
         'id': videoDocId,
         'title': videoTitle.value.trim(),
         'description': videoDescription.value.trim(),
+
         'ingredients': ingredientsList,
+
         'videoUrl': videoUrl,
         'thumbnailUrl': thumbnailUrl,
+
         'category': selectedCategoryName.value,
         'categoryId': selectedCategory.value,
+
         'tags': selectedTags.toList(),
+
+        'searchKeywords': keywords,
+
         'duration': videoDuration.value,
         'durationInSeconds': videoDurationInSeconds.value,
+
         'videoType': 'long',
         'selectedUploadType': uploadType.value,
+
         'userId': uid,
+        'createdBy': uid,
+
         'userName': _auth.currentUser!.displayName ?? 'User',
         'userEmail': _auth.currentUser!.email ?? '',
         'userImage': _auth.currentUser!.photoURL ?? '',
+
         'likes': 0,
         'views': 0,
         'comments': 0,
         'shares': 0,
         'rating': 0.0,
+
         'isActive': true,
         'isPopular': false,
+
         'visibility': 'visible',
+
         'adminNote': '',
+
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
-
       await _firestore
           .collection('recipe_videos')
           .doc(videoDocId)
@@ -572,6 +651,42 @@ class UploadController extends GetxController {
       await VideoCompress.deleteAllCache();
       print('🗑️ Upload complete - Cache cleared');
     }
+  }
+
+  List<String> generateSearchKeywords(String text) {
+    final words = text.toLowerCase().split(' ');
+
+    Set<String> keywords = {};
+
+    for (String word in words) {
+      String temp = '';
+
+      for (int i = 0; i < word.length; i++) {
+        temp += word[i];
+        keywords.add(temp);
+      }
+
+      keywords.add(word);
+    }
+
+    return keywords.toList();
+  }
+
+  List<String> generateKeywords(String text) {
+    List<String> keywords = [];
+
+    List<String> words = text.toLowerCase().split(' ');
+
+    for (var word in words) {
+      String temp = '';
+
+      for (int i = 0; i < word.length; i++) {
+        temp += word[i];
+        keywords.add(temp);
+      }
+    }
+
+    return keywords.toSet().toList();
   }
 
   // ==================== CANCEL UPLOAD ====================

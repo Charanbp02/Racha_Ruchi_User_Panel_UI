@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:racharuchi/App/Modules/About/view/about_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/view/address_view.dart';
 import 'package:racharuchi/App/Modules/Coupons/view/coupons_view.dart';
 import 'package:racharuchi/App/Modules/HelpSupport/view/help_support_view.dart';
@@ -11,7 +12,6 @@ import 'package:racharuchi/App/Modules/Notifications/view/notification_view.dart
 import 'package:racharuchi/App/Modules/PrivacyPolicy/view/privacy_policy_view.dart';
 import 'package:racharuchi/App/Modules/Profile/controller/profile_controller.dart';
 import 'package:racharuchi/App/Modules/Social/view/social_view.dart';
-import 'package:racharuchi/App/Modules/Stats/view/stats_view.dart';
 
 class ProfileView extends StatelessWidget {
   const ProfileView({super.key});
@@ -308,14 +308,6 @@ class ProfileView extends StatelessWidget {
             onTap: () => Get.to(() => const SocialView(showFollowers: false)),
           ),
           _buildDivider(),
-
-          // Likes - Navigate to Stats page
-          _buildStatItemWithTap(
-            controller.totalLikes.value,
-            'Likes',
-            Iconsax.heart,
-            onTap: () => Get.to(() => const StatsView()),
-          ),
         ],
       ),
     );
@@ -454,6 +446,8 @@ class ProfileView extends StatelessWidget {
       case 'Privacy Policy':
         Get.to(() => const PrivacyPolicyView());
         break;
+      case "About Us":
+        Get.to(() => const AboutView());
       case 'Logout':
         _showLogoutDialog(controller);
         break;

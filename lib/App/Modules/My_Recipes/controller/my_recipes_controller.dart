@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:racharuchi/App/Models/My_Recipe_Model/recipe_model.dart';
+import 'package:racharuchi/App/Modules/Upload/controller/upload_controller.dart';
 
 class MyRecipesController extends GetxController {
   var myRecipes = <RecipeModel>[].obs;
@@ -21,9 +22,18 @@ class MyRecipesController extends GetxController {
   StreamSubscription<QuerySnapshot>? _recipesSubscription;
   StreamSubscription<User?>? _authSubscription;
 
+  late UploadController uploadController;
+
   @override
   void onInit() {
     super.onInit();
+
+    if (!Get.isRegistered<UploadController>()) {
+      Get.put(UploadController(), permanent: true);
+    }
+
+    uploadController = Get.find<UploadController>();
+
     _setupAuthListener();
   }
 
@@ -326,6 +336,18 @@ class MyRecipesController extends GetxController {
 
   Future<void> refreshData() async {
     loadMyRecipes();
+  }
+
+  bool get isUploading {
+    return uploadController.isUploading.value;
+  }
+
+  double get uploadProgress {
+    return uploadController.uploadProgress.value;
+  }
+
+  bool get isUploadMinimized {
+    return uploadController.isUploadMinimized.value;
   }
 
   void _showErrorSnackbar(String message) {

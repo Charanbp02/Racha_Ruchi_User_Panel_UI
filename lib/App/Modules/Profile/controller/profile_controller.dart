@@ -40,6 +40,7 @@ class ProfileController extends GetxController {
         {'title': 'Notifications', 'icon': Iconsax.notification},
         {'title': 'Help & Support', 'icon': Iconsax.headphone},
         {'title': 'Privacy Policy', 'icon': Iconsax.shield_tick},
+        {'title': 'About Us', 'icon': Iconsax.info_circle},
         {'title': 'Logout', 'icon': Iconsax.logout},
       ].obs;
 

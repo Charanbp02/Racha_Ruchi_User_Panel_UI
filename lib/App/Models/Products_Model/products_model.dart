@@ -11,8 +11,6 @@ class ProductModel {
   final double rating;
   final int reviews;
   final bool isInStock;
-  bool isLiked;
-  int quantity;
 
   ProductModel({
     required this.id,
@@ -26,33 +24,40 @@ class ProductModel {
     required this.brand,
     required this.rating,
     required this.reviews,
-    this.isInStock = true,
-    this.isLiked = false,
-    this.quantity = 1,
+    required this.isInStock,
   });
-}
 
-class ProductCategory {
-  final String id;
-  final String name;
-  final String icon;
-  final int productCount;
-  bool isSelected;
+  factory ProductModel.fromMap(Map<String, dynamic> map) {
+    return ProductModel(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      description: map['description'] ?? '',
+      price: map['price'] ?? '',
+      originalPrice: map['originalPrice'] ?? '',
+      discount: map['discount'] ?? '',
+      images: List<String>.from(map['images'] ?? []),
+      category: map['category'] ?? '',
+      brand: map['brand'] ?? '',
+      rating: (map['rating'] ?? 0).toDouble(),
+      reviews: map['reviews'] ?? 0,
+      isInStock: map['isInStock'] ?? true,
+    );
+  }
 
-  ProductCategory({
-    required this.id,
-    required this.name,
-    required this.icon,
-    this.productCount = 0,
-    this.isSelected = false,
-  });
-}
-
-class CartItem {
-  final ProductModel product;
-  int quantity;
-
-  CartItem({required this.product, this.quantity = 1});
-
-  double get totalPrice => double.parse(product.price) * quantity;
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'price': price,
+      'originalPrice': originalPrice,
+      'discount': discount,
+      'images': images,
+      'category': category,
+      'brand': brand,
+      'rating': rating,
+      'reviews': reviews,
+      'isInStock': isInStock,
+    };
+  }
 }

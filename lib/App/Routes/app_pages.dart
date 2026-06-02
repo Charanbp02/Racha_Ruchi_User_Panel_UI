@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 import 'package:racharuchi/App/Modules/AIChat/binding/ai_chat_binding.dart';
 import 'package:racharuchi/App/Modules/AIChat/view/ai_chat_view.dart';
+import 'package:racharuchi/App/Modules/About/binding/about_binding.dart';
+import 'package:racharuchi/App/Modules/About/view/about_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/binding/address_binding.dart';
 import 'package:racharuchi/App/Modules/AddressBook/view/address_view.dart';
 import 'package:racharuchi/App/Modules/All_Videos/binding/videos_binding.dart';
@@ -34,12 +36,11 @@ import 'package:racharuchi/App/Modules/Profile/binding/profile_binding.dart';
 import 'package:racharuchi/App/Modules/Profile/view/profile_view.dart';
 import 'package:racharuchi/App/Modules/Search/binding/search_binding.dart';
 import 'package:racharuchi/App/Modules/Search/view/search_bar_view.dart';
+import 'package:racharuchi/App/Modules/Search/view/search_results_page.dart';
 import 'package:racharuchi/App/Modules/Social/binding/social_binding.dart';
 import 'package:racharuchi/App/Modules/Social/view/social_view.dart';
 import 'package:racharuchi/App/Modules/Splash/binding/splash_binding.dart';
 import 'package:racharuchi/App/Modules/Splash/view/splash_view.dart';
-import 'package:racharuchi/App/Modules/Stats/binding/stats_binding.dart';
-import 'package:racharuchi/App/Modules/Stats/view/stats_view.dart';
 import 'package:racharuchi/App/Modules/Upload/binding/upload_binding.dart';
 import 'package:racharuchi/App/Modules/Upload/view/upload_view.dart';
 import 'package:racharuchi/App/Modules/VideoPlayer/binding/video_player_binding.dart';
@@ -142,11 +143,6 @@ class AppPages {
       binding: AuthBinding(),
     ),
     GetPage(
-      name: Routes.STATS,
-      page: () => const StatsView(),
-      binding: StatsBinding(),
-    ),
-    GetPage(
       name: Routes.SOCIAL,
       page: () => const SocialView(),
       binding: SocialBinding(),
@@ -165,6 +161,12 @@ class AppPages {
       name: Routes.AICHAT,
       page: () => const AIChatView(),
       binding: AIChatBinding(),
+    ),
+    GetPage(name: Routes.SEARCH_RESULTS, page: () => const SearchResultsPage()),
+    GetPage(
+      name: Routes.ABOUT_US,
+      page: () => const AboutView(),
+      binding: AboutBinding(),
     ),
   ];
 }

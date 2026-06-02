@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:racharuchi/App/Modules/Upload/controller/upload_controller.dart';
 import 'package:racharuchi/App/Routes/app_pages.dart';
 import 'package:racharuchi/App/Routes/app_routes.dart';
 import 'firebase_options.dart';
@@ -42,6 +43,11 @@ void main() async {
     debugPrint('❌ Firebase Storage error: $e');
   }
 
+  // Register globally
+  Get.put(UploadController(), permanent: true);
+
+  print(Firebase.app().options.projectId);
+
   runApp(const MyApp());
 }
 
@@ -62,7 +68,7 @@ class MyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: Color(0xFF2D2D2D)),
         ),
       ),
-      initialRoute: AppRoutes.INITIAL,
+      initialRoute: AppRoutes.SPLASH,
       getPages: AppPages.routes,
     );
   }

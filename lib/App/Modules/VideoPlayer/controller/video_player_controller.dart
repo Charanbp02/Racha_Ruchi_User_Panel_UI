@@ -49,7 +49,7 @@ class VideoPlayerControllerX extends GetxController {
 
   // ✅ ADDED: Stream subscriptions for real-time updates
   StreamSubscription<DocumentSnapshot>? _followSubscription;
-  StreamSubscription<DocumentSnapshot>? _followerCountSubscription;
+  StreamSubscription<QuerySnapshot>? _followerCountSubscription;
 
   VideoPlayerControllerX({
     required this.videoUrl,
@@ -250,31 +250,24 @@ class VideoPlayerControllerX extends GetxController {
 
   // ✅ ADDED: Real-time follower count listener
   void listenFollowerCount() {
-    // Cancel existing subscription
     _followerCountSubscription?.cancel();
 
-    // Start realtime listener for follower count
     _followerCountSubscription = _firestore
         .collection('users')
         .doc(userId)
+        .collection('followers')
         .snapshots()
-        .listen(
-          (doc) {
-            if (!_isDisposed && doc.exists) {
-              final newCount = doc.data()?['followerCount'] ?? 0;
-              followerCount.value = newCount;
-              print('📡 Real-time follower count updated: $newCount');
-            }
-          },
-          onError: (error) {
-            print('❌ Follower count listener error: $error');
-          },
-        );
+        .listen((QuerySnapshot snapshot) {
+          followerCount.value = snapshot.size;
+          print('Followers count: ${snapshot.size}');
+        });
   }
 
   // ✅ SIMPLIFIED: toggleFollow without manual UI updates
   Future<void> toggleFollow() async {
     if (isFollowingLoading.value) return;
+
+    print("Target User UID: $userId");
 
     final user = _auth.currentUser;
 
@@ -288,6 +281,8 @@ class VideoPlayerControllerX extends GetxController {
       );
       return;
     }
+
+    print("Current User UID: ${user.uid}");
 
     if (user.uid == userId) {
       Get.snackbar(
@@ -314,7 +309,6 @@ class VideoPlayerControllerX extends GetxController {
         // UNFOLLOW
         await followerRef.delete();
         await followingRef.delete();
-        await targetUserRef.update({'followerCount': FieldValue.increment(-1)});
 
         // ❌ REMOVED manual UI updates - realtime listener will handle
         // isFollowing.value = false;
