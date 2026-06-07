@@ -1,12 +1,11 @@
-import 'package:get/get.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_instance/src/bindings_interface.dart';
+import 'package:get/get_instance/src/extension_instance.dart';
 import 'package:racharuchi/App/Modules/Products/controller/products_controller.dart';
 
 class ProductsBinding extends Bindings {
   @override
   void dependencies() {
-    // Use Get.put instead of Get.lazyPut for immediate initialization
-    if (!Get.isRegistered<ProductsController>()) {
-      Get.put(ProductsController(), permanent: false);
-    }
+    Get.lazyPut<ProductsController>(() => ProductsController());
   }
 }

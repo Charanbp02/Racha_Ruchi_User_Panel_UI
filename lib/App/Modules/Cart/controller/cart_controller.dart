@@ -1,13 +1,26 @@
+// lib/App/Modules/Cart/controller/cart_controller.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:racharuchi/App/Models/Cart_Model/cart_models.dart';
+import 'package:racharuchi/App/Models/Products_Model/products_model.dart';
 
 class CartController extends GetxController {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   var cartItems = <CartItemModel>[].obs;
   var isLoading = false.obs;
+  var isUpdating = false.obs;
   var selectedAddress = 0.obs;
   var deliveryCharge = 40.0.obs;
   var taxPercentage = 5.0.obs;
+  var discountAmount = 0.0.obs;
+  var appliedCoupon = ''.obs;
+
+  // Get current user ID
+  String? get currentUserId => _auth.currentUser?.uid;
 
   @override
   void onInit() {
@@ -15,90 +28,231 @@ class CartController extends GetxController {
     loadCartItems();
   }
 
-  void loadCartItems() {
+  // Load cart items from Firebase
+  Future<void> loadCartItems() async {
+    if (currentUserId == null) {
+      isLoading.value = false;
+      return;
+    }
+
     isLoading.value = true;
 
-    // Simulate API call
-    Future.delayed(const Duration(milliseconds: 500), () {
-      cartItems.value = [
-        CartItemModel(
-          id: '1',
-          name: 'Chicken Biryani',
-          price: 299.0,
-          quantity: 1,
-          imageUrl:
-              'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d',
-          restaurant: 'Biryani House',
-          isVeg: false,
-        ),
-        CartItemModel(
-          id: '2',
-          name: 'Paneer Butter Masala',
-          price: 249.0,
-          quantity: 2,
-          imageUrl:
-              'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8',
-          restaurant: 'Punjabi Dhaba',
-          isVeg: true,
-        ),
-        CartItemModel(
-          id: '3',
-          name: 'Garlic Naan',
-          price: 45.0,
-          quantity: 3,
-          imageUrl:
-              'https://images.unsplash.com/photo-1604135307499-6a4f9e2b11a0',
-          restaurant: 'Punjabi Dhaba',
-          isVeg: true,
-        ),
-        CartItemModel(
-          id: '4',
-          name: 'Masala Dosa',
-          price: 89.0,
-          quantity: 1,
-          imageUrl:
-              'https://images.unsplash.com/photo-1589301760014-3b6c3c3f5f5c',
-          restaurant: 'South Indian Cafe',
-          isVeg: true,
-        ),
-      ];
+    try {
+      final cartDoc =
+          await _firestore
+              .collection('carts')
+              .doc(currentUserId)
+              .collection('items')
+              .get();
+
+      final items =
+          cartDoc.docs.map((doc) {
+            return CartItemModel.fromJson(doc.data());
+          }).toList();
+
+      cartItems.assignAll(items);
+      print('✅ Loaded ${cartItems.length} items from cart');
+    } catch (e) {
+      print('❌ Error loading cart: $e');
+      _showSnackbar('Error', 'Failed to load cart items', isError: true);
+    } finally {
       isLoading.value = false;
-    });
-  }
-
-  void incrementQuantity(int index) {
-    cartItems[index].quantity++;
-    cartItems.refresh();
-  }
-
-  void decrementQuantity(int index) {
-    if (cartItems[index].quantity > 1) {
-      cartItems[index].quantity--;
-    } else {
-      removeItem(index);
     }
-    cartItems.refresh();
   }
 
-  void removeItem(int index) {
+  // Add product to cart with Firebase
+  Future<void> addToCart({
+    required ProductModel product,
+    int quantity = 1,
+    String? selectedWeight,
+  }) async {
+    if (currentUserId == null) {
+      _showSnackbar(
+        'Login Required',
+        'Please login to add items to cart',
+        isError: true,
+      );
+      return;
+    }
+
+    isUpdating.value = true;
+
+    try {
+      // Check if item already exists in cart with same variant
+      final existingItemIndex = cartItems.indexWhere(
+        (item) =>
+            item.id == product.id && item.selectedWeight == selectedWeight,
+      );
+
+      if (existingItemIndex != -1) {
+        // Update quantity of existing item
+        final existingItem = cartItems[existingItemIndex];
+        final newQuantity = existingItem.quantity + quantity;
+
+        await _updateCartItemInFirebase(
+          product.id,
+          newQuantity,
+          selectedWeight,
+        );
+
+        cartItems[existingItemIndex].quantity = newQuantity;
+        cartItems.refresh();
+
+        _showSnackbar(
+          'Cart Updated',
+          '${product.name} quantity increased to $newQuantity',
+        );
+      } else {
+        // Add new item
+        final cartItem = CartItemModel(
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: quantity,
+          imageUrl: product.mainImage,
+          restaurant: product.brand,
+          isVeg: true, // You can determine based on product category
+          selectedWeight: selectedWeight,
+          category: product.category,
+          brand: product.brand,
+        );
+
+        await _addCartItemToFirebase(cartItem);
+        cartItems.add(cartItem);
+
+        _showSnackbar(
+          'Added to Cart',
+          '${product.name}${selectedWeight != null ? ' ($selectedWeight)' : ''} added to cart',
+        );
+      }
+
+      // Update cart count in UI
+      update();
+    } catch (e) {
+      print('❌ Error adding to cart: $e');
+      _showSnackbar('Error', 'Failed to add item to cart', isError: true);
+    } finally {
+      isUpdating.value = false;
+    }
+  }
+
+  // Add cart item to Firebase
+  Future<void> _addCartItemToFirebase(CartItemModel item) async {
+    await _firestore
+        .collection('carts')
+        .doc(currentUserId)
+        .collection('items')
+        .doc('${item.id}_${item.selectedWeight ?? 'default'}')
+        .set(item.toJson());
+  }
+
+  // Update cart item in Firebase
+  Future<void> _updateCartItemInFirebase(
+    String productId,
+    int newQuantity,
+    String? selectedWeight,
+  ) async {
+    await _firestore
+        .collection('carts')
+        .doc(currentUserId)
+        .collection('items')
+        .doc('${productId}_${selectedWeight ?? 'default'}')
+        .update({'quantity': newQuantity});
+  }
+
+  // Increment quantity
+  Future<void> incrementQuantity(int index) async {
+    if (currentUserId == null) return;
+
+    isUpdating.value = true;
+
+    try {
+      final item = cartItems[index];
+      final newQuantity = item.quantity + 1;
+
+      await _updateCartItemInFirebase(
+        item.id,
+        newQuantity,
+        item.selectedWeight,
+      );
+
+      cartItems[index].quantity = newQuantity;
+      cartItems.refresh();
+
+      _saveToStorage();
+    } catch (e) {
+      print('❌ Error incrementing quantity: $e');
+    } finally {
+      isUpdating.value = false;
+    }
+  }
+
+  // Decrement quantity
+  Future<void> decrementQuantity(int index) async {
+    if (currentUserId == null) return;
+
+    isUpdating.value = true;
+
+    try {
+      final item = cartItems[index];
+
+      if (item.quantity > 1) {
+        final newQuantity = item.quantity - 1;
+        await _updateCartItemInFirebase(
+          item.id,
+          newQuantity,
+          item.selectedWeight,
+        );
+
+        cartItems[index].quantity = newQuantity;
+        cartItems.refresh();
+      } else {
+        await removeItem(index);
+      }
+
+      _saveToStorage();
+    } catch (e) {
+      print('❌ Error decrementing quantity: $e');
+    } finally {
+      isUpdating.value = false;
+    }
+  }
+
+  // Remove item from cart
+  Future<void> removeItem(int index) async {
+    if (currentUserId == null) return;
+
+    final item = cartItems[index];
+
     Get.dialog(
       AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Remove Item'),
-        content: Text('Remove ${cartItems[index].name} from cart?'),
+        content: Text('Remove ${item.displayName} from cart?'),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
-              cartItems.removeAt(index);
+            onPressed: () async {
               Get.back();
-              Get.snackbar(
-                'Removed',
-                'Item removed from cart',
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.green,
-                colorText: Colors.white,
-              );
+              isUpdating.value = true;
+
+              try {
+                await _firestore
+                    .collection('carts')
+                    .doc(currentUserId)
+                    .collection('items')
+                    .doc('${item.id}_${item.selectedWeight ?? 'default'}')
+                    .delete();
+
+                cartItems.removeAt(index);
+                _saveToStorage();
+                _showSnackbar('Removed', 'Item removed from cart');
+              } catch (e) {
+                print('❌ Error removing item: $e');
+                _showSnackbar('Error', 'Failed to remove item', isError: true);
+              } finally {
+                isUpdating.value = false;
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -111,6 +265,87 @@ class CartController extends GetxController {
         ],
       ),
     );
+  }
+
+  // Clear entire cart
+  Future<void> clearCart() async {
+    if (currentUserId == null) return;
+
+    if (cartItems.isEmpty) {
+      _showSnackbar('Cart Empty', 'No items to clear', isError: true);
+      return;
+    }
+
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Clear Cart'),
+        content: const Text('Are you sure you want to clear your cart?'),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Get.back();
+              isUpdating.value = true;
+
+              try {
+                // Delete all items from Firebase
+                final batch = _firestore.batch();
+                final itemsRef = _firestore
+                    .collection('carts')
+                    .doc(currentUserId)
+                    .collection('items');
+
+                final snapshot = await itemsRef.get();
+                for (var doc in snapshot.docs) {
+                  batch.delete(doc.reference);
+                }
+                await batch.commit();
+
+                cartItems.clear();
+                discountAmount.value = 0;
+                appliedCoupon.value = '';
+
+                _saveToStorage();
+                _showSnackbar('Cleared', 'Cart cleared successfully');
+              } catch (e) {
+                print('❌ Error clearing cart: $e');
+                _showSnackbar('Error', 'Failed to clear cart', isError: true);
+              } finally {
+                isUpdating.value = false;
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Sync cart with Firebase (real-time)
+  void syncCartWithFirebase() {
+    if (currentUserId == null) return;
+
+    _firestore
+        .collection('carts')
+        .doc(currentUserId)
+        .collection('items')
+        .snapshots()
+        .listen((snapshot) {
+          final items =
+              snapshot.docs.map((doc) {
+                return CartItemModel.fromJson(doc.data());
+              }).toList();
+
+          cartItems.assignAll(items);
+          print('🔄 Cart synced: ${items.length} items');
+        });
   }
 
   double getSubtotal() {
@@ -126,78 +361,112 @@ class CartController extends GetxController {
   }
 
   double getTotal() {
-    return getSubtotal() + deliveryCharge.value + getTax();
+    return getSubtotal() +
+        deliveryCharge.value +
+        getTax() -
+        discountAmount.value;
   }
 
-  void clearCart() {
-    Get.dialog(
-      AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Clear Cart'),
-        content: const Text('Are you sure you want to clear your cart?'),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              cartItems.clear();
-              Get.back();
-              Get.snackbar(
-                'Cleared',
-                'Cart cleared successfully',
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.green,
-                colorText: Colors.white,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Clear All'),
-          ),
-        ],
-      ),
-    );
+  int get totalItems {
+    int total = 0;
+    for (var item in cartItems) {
+      total += item.quantity;
+    }
+    return total;
   }
 
   void applyCoupon(String couponCode) {
-    if (couponCode == 'SAVE20') {
-      Get.snackbar(
-        'Coupon Applied',
-        'You saved ₹20 on your order',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
+    if (couponCode.isEmpty) {
+      _showSnackbar('Error', 'Please enter a coupon code', isError: true);
+      return;
+    }
+
+    if (appliedCoupon.value == couponCode) {
+      _showSnackbar(
+        'Already Applied',
+        'This coupon is already applied',
+        isError: true,
       );
+      return;
+    }
+
+    // Coupon validation logic
+    if (couponCode.toUpperCase() == 'SAVE20') {
+      discountAmount.value = 20.0;
+      appliedCoupon.value = couponCode.toUpperCase();
+      _showSnackbar(
+        'Coupon Applied!',
+        'You saved ₹${discountAmount.value.toStringAsFixed(2)}',
+      );
+    } else if (couponCode.toUpperCase() == 'SAVE10') {
+      discountAmount.value = 10.0;
+      appliedCoupon.value = couponCode.toUpperCase();
+      _showSnackbar(
+        'Coupon Applied!',
+        'You saved ₹${discountAmount.value.toStringAsFixed(2)}',
+      );
+    } else if (couponCode.toUpperCase() == 'FREEDELIVERY') {
+      deliveryCharge.value = 0;
+      appliedCoupon.value = couponCode.toUpperCase();
+      _showSnackbar('Coupon Applied!', 'Free delivery applied');
     } else {
-      Get.snackbar(
+      _showSnackbar(
         'Invalid Coupon',
         'Please enter a valid coupon code',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+        isError: true,
       );
+    }
+  }
+
+  void removeCoupon() {
+    if (appliedCoupon.value.isNotEmpty) {
+      discountAmount.value = 0;
+      deliveryCharge.value = 40.0;
+      appliedCoupon.value = '';
+      _showSnackbar('Coupon Removed', 'Coupon has been removed');
     }
   }
 
   void proceedToCheckout() {
     if (cartItems.isEmpty) {
-      Get.snackbar(
+      _showSnackbar(
         'Cart Empty',
         'Add items to your cart first',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+        isError: true,
       );
       return;
     }
 
     Get.toNamed(
       '/checkout',
-      arguments: {'items': cartItems, 'total': getTotal()},
+      arguments: {
+        'items': cartItems,
+        'subtotal': getSubtotal(),
+        'deliveryCharge': deliveryCharge.value,
+        'tax': getTax(),
+        'discount': discountAmount.value,
+        'total': getTotal(),
+        'coupon': appliedCoupon.value,
+      },
+    );
+  }
+
+  void _saveToStorage() {
+    // Save to local storage for offline access
+    // You can implement SharedPreferences or GetStorage here
+    print('Cart saved locally: ${cartItems.length} items');
+  }
+
+  void _showSnackbar(String title, String message, {bool isError = false}) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: isError ? Colors.red : Colors.green,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 2),
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
     );
   }
 }
-

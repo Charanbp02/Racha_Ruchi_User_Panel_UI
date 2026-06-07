@@ -22,6 +22,7 @@ abstract class AppRoutes {
   static const MY_ORDERS = Routes.MY_ORDERS;
   static const MY_RECIPES = Routes.MY_RECIPES;
   static const COUPONS = Routes.COUPONS;
+  static const ADD_EDIT_ADDRESS = Routes.ADD_EDIT_ADDRESS;
   static const ADDRESS_BOOK = Routes.ADDRESS_BOOK;
   static const HELP_SUPPORT = Routes.HELP_SUPPORT;
   static const STATS = Routes.STATS;
@@ -31,6 +32,7 @@ abstract class AppRoutes {
   static const AICHAT = Routes.AICHAT;
   static const SEARCH_RESULTS = Routes.SEARCH_RESULTS;
   static const ABOUT_US = Routes.ABOUT_US;
+  static const PRODUCT_DETAILS = Routes.PRODUCT_DETAILS;
 }
 
 // routes.dart (ensure all routes are defined)
@@ -56,6 +58,7 @@ abstract class Routes {
   static const MY_ORDERS = '/orders';
   static const MY_RECIPES = '/my-recipes';
   static const COUPONS = '/coupons';
+  static const ADD_EDIT_ADDRESS = '/add-edit-address';
   static const ADDRESS_BOOK = '/address-book';
   static const HELP_SUPPORT = '/help-support';
   static const STATS = '/stats';
@@ -65,4 +68,5 @@ abstract class Routes {
   static const AICHAT = '/ai-chat';
   static const SEARCH_RESULTS = '/search-results';
   static const ABOUT_US = '/about-us';
+  static const PRODUCT_DETAILS = '/product-details';
 }

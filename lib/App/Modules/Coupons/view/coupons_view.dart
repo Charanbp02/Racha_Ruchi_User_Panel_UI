@@ -1,3 +1,4 @@
+// lib/App/Modules/Coupons/view/coupons_view.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
@@ -14,12 +15,40 @@ class CouponsView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text(
-          'My Coupons',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Color(0xFF2D2D2D),
+        title: Obx(
+          () => Stack(
+            children: [
+              const Text(
+                'My Coupons',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: Color(0xFF2D2D2D),
+                ),
+              ),
+              // New coupon notification badge
+              if (controller.availableCoupons.where((c) => c.isNew).isNotEmpty)
+                Positioned(
+                  right: -8,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 12,
+                      minHeight: 12,
+                    ),
+                    child: Text(
+                      '${controller.availableCoupons.where((c) => c.isNew).length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 8),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
         backgroundColor: Colors.white,
@@ -32,12 +61,12 @@ class CouponsView extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Iconsax.refresh, color: Color(0xFFE53935)),
-            onPressed: () => controller.loadCoupons(),
+            onPressed: () => controller.refreshCoupons(),
           ),
         ],
       ),
       body: Obx(() {
-        if (controller.isLoading.value) {
+        if (controller.isLoading.value && controller.availableCoupons.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFFE53935)),
           );
@@ -196,6 +225,10 @@ class CouponsView extends StatelessWidget {
   }
 
   Widget _buildCouponCard(CouponModel coupon, CouponsController controller) {
+    // Format valid till date
+    String validTill =
+        '${coupon.validTill.day}/${coupon.validTill.month}/${coupon.validTill.year}';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Material(
@@ -347,7 +380,7 @@ class CouponsView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Min. Order ${coupon.minOrder}',
+                              'Min. Order ₹${coupon.minOrder.toStringAsFixed(0)}',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withValues(alpha: 0.9),
@@ -355,7 +388,7 @@ class CouponsView extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Valid till: ${coupon.validTill}',
+                              'Valid till: $validTill',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withValues(alpha: 0.7),
@@ -365,7 +398,8 @@ class CouponsView extends StatelessWidget {
                         ),
                         Row(
                           children: [
-                            if (controller.selectedTab.value == 0)
+                            if (controller.selectedTab.value == 0 &&
+                                coupon.isValid)
                               GestureDetector(
                                 onTap: () => controller.applyCoupon(coupon),
                                 child: Container(
@@ -435,7 +469,7 @@ class CouponsView extends StatelessWidget {
                         ),
                         child: Text(
                           controller.selectedTab.value == 1
-                              ? 'USED ON ${coupon.usedOn ?? "15 Oct 2024"}'
+                              ? 'USED'
                               : 'EXPIRED',
                           style: const TextStyle(
                             fontSize: 14,

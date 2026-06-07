@@ -1,97 +1,259 @@
+// lib/App/Modules/AddressBook/controller/address_controller.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:racharuchi/App/Models/Address_Book_Model/address_book_model.dart';
-import 'package:racharuchi/App/Modules/AddressBook/view/add_edit_address_view.dart';
+import 'package:racharuchi/App/Routes/app_routes.dart';
 
 class AddressController extends GetxController {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   var addresses = <AddressModel>[].obs;
   var isLoading = false.obs;
+  var isSyncing = false.obs;
   var selectedAddressId = ''.obs;
+
+  // Performance optimization
+  bool _isInitialized = false;
+  StreamSubscription<QuerySnapshot>? _addressesSubscription;
+
+  String? get currentUserId => _auth.currentUser?.uid;
 
   @override
   void onInit() {
     super.onInit();
-    loadAddresses();
-  }
-
-  void loadAddresses() {
-    isLoading.value = true;
-
-    // Simulate API call
-    Future.delayed(const Duration(milliseconds: 500), () {
-      addresses.value = [
-        AddressModel(
-          id: '1',
-          type: 'Home',
-          name: 'Ramesh Kumar',
-          phone: '+91 98765 43210',
-          alternatePhone: '+91 98765 43211',
-          addressLine1: '123, MG Road',
-          addressLine2: 'Near City Mall',
-          landmark: 'Opposite City Metro Station',
-          city: 'Bangalore',
-          state: 'Karnataka',
-          pincode: '560001',
-          country: 'India',
-          isDefault: true,
-          latitude: 12.9716,
-          longitude: 77.5946,
-        ),
-        AddressModel(
-          id: '2',
-          type: 'Work',
-          name: 'Ramesh Kumar',
-          phone: '+91 98765 43210',
-          addressLine1: '456, Tech Park',
-          addressLine2: 'Electronic City',
-          landmark: 'Near Infosys Campus',
-          city: 'Bangalore',
-          state: 'Karnataka',
-          pincode: '560100',
-          country: 'India',
-          isDefault: false,
-          latitude: 12.8458,
-          longitude: 77.6605,
-        ),
-        AddressModel(
-          id: '3',
-          type: 'Other',
-          name: 'Ramesh Kumar',
-          phone: '+91 98765 43210',
-          addressLine1: '789, Residency Road',
-          addressLine2: 'Shanthinagar',
-          landmark: 'Near Forum Mall',
-          city: 'Bangalore',
-          state: 'Karnataka',
-          pincode: '560025',
-          country: 'India',
-          isDefault: false,
-          latitude: 12.9609,
-          longitude: 77.5946,
-        ),
-      ];
-      isLoading.value = false;
+    // Use post frame callback to avoid blocking initial rendering
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (currentUserId != null && !_isInitialized) {
+        _initializeRealtimeAddresses();
+      }
     });
   }
 
-  void setDefaultAddress(String id) {
-    for (var address in addresses) {
-      address.isDefault = address.id == id;
-    }
-    selectedAddressId.value = id;
-    addresses.refresh();
-
-    Get.snackbar(
-      'Default Address Updated',
-      'Your default address has been changed',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 2),
-    );
+  @override
+  void onClose() {
+    _addressesSubscription?.cancel();
+    super.onClose();
   }
 
-  void deleteAddress(String id) {
+  // Optimized real-time addresses listener
+  void _initializeRealtimeAddresses() {
+    if (currentUserId == null || _isInitialized) return;
+
+    _isInitialized = true;
+    isLoading.value = true;
+
+    // Use simpler query without complex ordering initially
+    _addressesSubscription = _firestore
+        .collection('users')
+        .doc(currentUserId)
+        .collection('addresses')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            // Process data in a non-blocking way
+            Future(() {
+              final addressList =
+                  snapshot.docs.map((doc) {
+                    return AddressModel.fromMap(doc.data(), doc.id);
+                  }).toList();
+
+              // Sort on client side (less strain on Firestore)
+              addressList.sort((a, b) {
+                if (a.isDefault && !b.isDefault) return -1;
+                if (!a.isDefault && b.isDefault) return 1;
+                return b.createdAt.compareTo(a.createdAt);
+              });
+
+              addresses.value = addressList;
+
+              final defaultAddress = addressList.firstWhereOrNull(
+                (a) => a.isDefault,
+              );
+              if (defaultAddress != null) {
+                selectedAddressId.value = defaultAddress.id;
+              }
+
+              isLoading.value = false;
+              print('✅ Addresses updated: ${addressList.length} addresses');
+            });
+          },
+          onError: (error) {
+            print('❌ Error loading addresses: $error');
+            Future(() {
+              isLoading.value = false;
+              if (Get.isSnackbarOpen == false) {
+                Get.snackbar(
+                  'Error',
+                  'Failed to load addresses. Please check your connection.',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                  duration: const Duration(seconds: 3),
+                );
+              }
+            });
+          },
+        );
+  }
+
+  // Set default address with batch write
+  Future<void> setDefaultAddress(String id) async {
+    if (currentUserId == null) return;
+
+    isSyncing.value = true;
+
+    try {
+      final addressesRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('addresses');
+
+      final batch = _firestore.batch();
+      final snapshot = await addressesRef.get();
+
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {'isDefault': doc.id == id});
+      }
+
+      await batch.commit();
+
+      if (Get.isSnackbarOpen == false) {
+        Get.snackbar(
+          'Success',
+          'Default address updated',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e) {
+      print('Error setting default address: $e');
+    } finally {
+      isSyncing.value = false;
+    }
+  }
+
+  // Add new address
+  Future<void> addAddress(AddressModel address) async {
+    if (currentUserId == null) {
+      _showError('Please login to add address');
+      return;
+    }
+
+    isLoading.value = true;
+
+    try {
+      final addressesRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('addresses');
+
+      // Check if this is the first address
+      final snapshot = await addressesRef.limit(1).get();
+      final isFirstAddress = snapshot.docs.isEmpty;
+
+      final shouldBeDefault = address.isDefault || isFirstAddress;
+
+      // If setting as default, update others
+      if (shouldBeDefault && !isFirstAddress) {
+        final allAddresses = await addressesRef.get();
+        if (allAddresses.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (var doc in allAddresses.docs) {
+            batch.update(doc.reference, {'isDefault': false});
+          }
+          await batch.commit();
+        }
+      }
+
+      // Add new address
+      final docRef = addressesRef.doc();
+      final newAddress = AddressModel(
+        id: docRef.id,
+        type: address.type,
+        name: address.name,
+        phone: address.phone,
+        alternatePhone: address.alternatePhone,
+        addressLine1: address.addressLine1,
+        addressLine2: address.addressLine2,
+        landmark: address.landmark,
+        city: address.city,
+        state: address.state,
+        pincode: address.pincode,
+        country: address.country,
+        isDefault: shouldBeDefault,
+        latitude: address.latitude,
+        longitude: address.longitude,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await docRef.set(newAddress.toMap());
+
+      Get.back();
+      _showSuccess('Address added successfully');
+    } catch (e) {
+      print('Error adding address: $e');
+      _showError('Failed to add address');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Edit address
+  Future<void> editAddress(AddressModel address) async {
+    if (currentUserId == null) return;
+
+    isLoading.value = true;
+
+    try {
+      final addressRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('addresses')
+          .doc(address.id);
+
+      // If setting as default, update other addresses
+      if (address.isDefault) {
+        final addressesRef = _firestore
+            .collection('users')
+            .doc(currentUserId)
+            .collection('addresses');
+
+        final snapshot = await addressesRef.get();
+        if (snapshot.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (var doc in snapshot.docs) {
+            if (doc.id != address.id) {
+              batch.update(doc.reference, {'isDefault': false});
+            }
+          }
+          await batch.commit();
+        }
+      }
+
+      await addressRef.update(address.toMap(isUpdate: true));
+
+      Get.back();
+      _showSuccess('Address updated successfully');
+    } catch (e) {
+      print('Error updating address: $e');
+      _showError('Failed to update address');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Delete address
+  Future<void> deleteAddress(String id) async {
+    if (currentUserId == null) return;
+
     Get.dialog(
       AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -100,16 +262,38 @@ class AddressController extends GetxController {
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
-              addresses.removeWhere((address) => address.id == id);
+            onPressed: () async {
               Get.back();
-              Get.snackbar(
-                'Deleted',
-                'Address deleted successfully',
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.green,
-                colorText: Colors.white,
-              );
+              isLoading.value = true;
+
+              try {
+                final addressRef = _firestore
+                    .collection('users')
+                    .doc(currentUserId)
+                    .collection('addresses')
+                    .doc(id);
+
+                final addressDoc = await addressRef.get();
+                final wasDefault = addressDoc.data()?['isDefault'] ?? false;
+
+                await addressRef.delete();
+
+                // If deleted address was default, set another as default
+                if (wasDefault && addresses.length > 1) {
+                  final remainingAddresses =
+                      addresses.where((a) => a.id != id).toList();
+                  if (remainingAddresses.isNotEmpty) {
+                    await setDefaultAddress(remainingAddresses.first.id);
+                  }
+                }
+
+                _showSuccess('Address deleted successfully');
+              } catch (e) {
+                print('Error deleting address: $e');
+                _showError('Failed to delete address');
+              } finally {
+                isLoading.value = false;
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -124,42 +308,64 @@ class AddressController extends GetxController {
     );
   }
 
-  void addAddress(AddressModel address) {
-    addresses.add(address);
-    addresses.refresh();
-    Get.back();
-    Get.snackbar(
-      'Address Added',
-      'New address added successfully',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-    );
+  // Helper methods
+  AddressModel? getAddressById(String id) {
+    try {
+      return addresses.firstWhere((address) => address.id == id);
+    } catch (e) {
+      return null;
+    }
   }
 
-  void editAddress(AddressModel address) {
-    final index = addresses.indexWhere((a) => a.id == address.id);
-    if (index != -1) {
-      addresses[index] = address;
-      addresses.refresh();
-      Get.back();
-      Get.snackbar(
-        'Address Updated',
-        'Address updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+  AddressModel? get defaultAddress {
+    try {
+      return addresses.firstWhere((address) => address.isDefault);
+    } catch (e) {
+      return addresses.isNotEmpty ? addresses.first : null;
     }
   }
 
   void showAddAddressForm() {
-    Get.to(() =>  AddEditAddressView());
+    Get.toNamed(Routes.ADD_EDIT_ADDRESS);
   }
 
   void showEditAddressForm(AddressModel address) {
-    Get.to(() => AddEditAddressView(address: address));
+    Get.toNamed(Routes.ADD_EDIT_ADDRESS, arguments: address);
+  }
+
+  Future<void> refreshAddresses() async {
+    isLoading.value = true;
+    await Future.delayed(const Duration(milliseconds: 300));
+    isLoading.value = false;
+  }
+
+  void _showSuccess(String message) {
+    if (Get.isSnackbarOpen == false) {
+      Get.snackbar(
+        'Success',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+      );
+    }
+  }
+
+  void _showError(String message) {
+    if (Get.isSnackbarOpen == false) {
+      Get.snackbar(
+        'Error',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+      );
+    }
   }
 }
-
-

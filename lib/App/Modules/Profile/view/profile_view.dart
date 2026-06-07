@@ -307,7 +307,6 @@ class ProfileView extends StatelessWidget {
             Iconsax.user_add,
             onTap: () => Get.to(() => const SocialView(showFollowers: false)),
           ),
-          _buildDivider(),
         ],
       ),
     );
@@ -372,43 +371,51 @@ class ProfileView extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = controller.menuItems[index];
               final isLogout = item['title'] == 'Logout';
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
-                decoration: BoxDecoration(
+                child: Material(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color:
-                          isLogout
-                              ? Colors.red.withValues(alpha: 0.1)
-                              : const Color(0xFFE53935).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      _getIconForMenuItem(item['title']!),
-                      size: 20,
-                      color: isLogout ? Colors.red : const Color(0xFFE53935),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      _handleMenuItemTap(item, controller);
+                    },
+                    child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color:
+                              isLogout
+                                  ? Colors.red.withValues(alpha: 0.1)
+                                  : const Color(
+                                    0xFFE53935,
+                                  ).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          _getIconForMenuItem(item['title']),
+                          size: 20,
+                          color:
+                              isLogout ? Colors.red : const Color(0xFFE53935),
+                        ),
+                      ),
+                      title: Text(
+                        item['title'],
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color:
+                              isLogout ? Colors.red : const Color(0xFF2D2D2D),
+                        ),
+                      ),
+                      trailing: Icon(
+                        Iconsax.arrow_right_3,
+                        size: 18,
+                        color: Colors.grey.shade400,
+                      ),
                     ),
                   ),
-                  title: Text(
-                    item['title']!,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isLogout ? Colors.red : const Color(0xFF2D2D2D),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Iconsax.arrow_right_3,
-                    size: 18,
-                    color: Colors.grey.shade400,
-                  ),
-                  onTap: () {
-                    _handleMenuItemTap(item, controller);
-                  },
                 ),
               );
             },

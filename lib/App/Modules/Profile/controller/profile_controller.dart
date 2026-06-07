@@ -47,10 +47,13 @@ class ProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Initialize Firebase Storage
+
     _storage = FirebaseStorage.instance;
     fetchUserData();
-    fetchUserStats();
+
+    listenFollowers(); // ✅ add this
+    listenFollowing(); // ✅ add this
+    listenRecipes(); // ✅ add this
   }
 
   void fetchUserData() async {
@@ -111,13 +114,54 @@ class ProfileController extends GetxController {
 
       if (userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
-        followers.value = (userData['followersCount'] ?? 0).toString();
-        following.value = (userData['followingCount'] ?? 0).toString();
         totalLikes.value = (userData['totalLikes'] ?? 0).toString();
       }
     } catch (e) {
       print('Error fetching user stats: $e');
     }
+  }
+
+  void listenFollowers() {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('followers')
+        .snapshots()
+        .listen((snapshot) {
+          followers.value = snapshot.docs.length.toString();
+        });
+  }
+
+  void listenFollowing() {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('following')
+        .snapshots()
+        .listen((snapshot) {
+          following.value = snapshot.docs.length.toString();
+        });
+  }
+
+  void listenRecipes() {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    _firestore
+        .collection('recipe_videos')
+        .where('userId', isEqualTo: user.uid)
+        .snapshots()
+        .listen((snapshot) {
+          recipes.value = snapshot.docs.length.toString();
+
+          print("Recipes => ${snapshot.docs.length}");
+        });
   }
 
   void toggleEditMode() {

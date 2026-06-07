@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:racharuchi/App/Models/Social_Model/social_model.dart';
 
 class SocialController extends GetxController {
   var isLoading = false.obs;
+
   var selectedTab = 0.obs; // 0 = Followers, 1 = Following
 
   var followers = <UserModel>[].obs;
@@ -11,108 +13,149 @@ class SocialController extends GetxController {
   var filteredUsers = <UserModel>[].obs;
   var searchQuery = ''.obs;
 
+  final int initialTab;
+  final RxSet<String> myFollowersSet = <String>{}.obs;
+
+  SocialController({required this.initialTab});
+
   @override
   void onInit() {
     super.onInit();
-    loadFollowers();
-    loadFollowing();
+
+    selectedTab.value = initialTab;
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId != null) {
+      loadFollowers(userId);
+      loadFollowing(userId);
+      loadMyFollowers(userId); // 🔥 ADD THIS
+    }
   }
 
-  void loadFollowers() {
+  Future<void> loadMyFollowers(String myUserId) async {
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(myUserId)
+            .collection('followers')
+            .get();
+
+    myFollowersSet.value = snapshot.docs.map((e) => e.id).toSet();
+  }
+
+  Future<void> loadFollowers(String userId) async {
     isLoading.value = true;
 
-    // Simulate API call
-    Future.delayed(const Duration(milliseconds: 500), () {
-      followers.value = [
+    final currentUserId = FirebaseAuth.instance.currentUser!.uid;
+
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('followers')
+            .get();
+
+    List<UserModel> temp = [];
+
+    for (var doc in snapshot.docs) {
+      final followerId = doc.id;
+
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(followerId)
+              .get();
+
+      final data = userDoc.data();
+
+      if (data == null) continue;
+
+      // 🔥 CHECK: does THIS user follow me back?
+      final myFollowingDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserId)
+              .collection('following')
+              .doc(followerId)
+              .get();
+
+      bool isFollowingBack = myFollowingDoc.exists;
+
+      temp.add(
         UserModel(
-          id: '1',
-          name: 'Chef Sanjeev Kapoor',
-          username: '@sanjeevkapoor',
-          imageUrl: 'https://randomuser.me/api/portraits/men/11.jpg',
-          bio: 'Master Chef | Food Blogger | 2M+ Followers',
-          recipes: 245,
-          followers: '2.1M',
-          isFollowing: true,
+          id: followerId,
+          name: data['name'] ?? '',
+          username: data['username'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          bio: data['bio'] ?? '',
+          recipes: (data['recipes_video'] ?? 0) as int,
+          followers: data['followers']?.toString() ?? '0',
+
+          // 🔥 IMPORTANT FIX
+          isFollowing: isFollowingBack,
         ),
-        UserModel(
-          id: '2',
-          name: 'Priya Reddy',
-          username: '@priya_cooks',
-          imageUrl: 'https://randomuser.me/api/portraits/women/12.jpg',
-          bio: 'South Indian Food Specialist | Recipe Creator',
-          recipes: 89,
-          followers: '45.2K',
-          isFollowing: true,
-        ),
-        UserModel(
-          id: '3',
-          name: 'Vikas Khanna',
-          username: '@vikaskhanna',
-          imageUrl: 'https://randomuser.me/api/portraits/men/13.jpg',
-          bio: 'Michelin Star Chef | Author | Restaurateur',
-          recipes: 156,
-          followers: '3.4M',
-          isFollowing: false,
-        ),
-        UserModel(
-          id: '4',
-          name: 'Tarla Dalal',
-          username: '@tarladalal',
-          imageUrl: 'https://randomuser.me/api/portraits/women/14.jpg',
-          bio: 'Iconic Indian Chef | Cookbook Author',
-          recipes: 1200,
-          followers: '5.2M',
-          isFollowing: true,
-        ),
-        UserModel(
-          id: '5',
-          name: 'Ranveer Brar',
-          username: '@ranveerbrar',
-          imageUrl: 'https://randomuser.me/api/portraits/men/15.jpg',
-          bio: 'Chef | TV Host | Food Storyteller',
-          recipes: 234,
-          followers: '2.8M',
-          isFollowing: false,
-        ),
-      ];
-      applyFilter();
-      isLoading.value = false;
-    });
+      );
+    }
+
+    followers.value = temp;
+    applyFilter();
+    isLoading.value = false;
   }
 
-  void loadFollowing() {
-    following.value = [
-      UserModel(
-        id: '1',
-        name: 'Chef Sanjeev Kapoor',
-        username: '@sanjeevkapoor',
-        imageUrl: 'https://randomuser.me/api/portraits/men/11.jpg',
-        bio: 'Master Chef | Food Blogger | 2M+ Followers',
-        recipes: 245,
-        followers: '2.1M',
-        isFollowing: true,
-      ),
-      UserModel(
-        id: '2',
-        name: 'Priya Reddy',
-        username: '@priya_cooks',
-        imageUrl: 'https://randomuser.me/api/portraits/women/12.jpg',
-        bio: 'South Indian Food Specialist | Recipe Creator',
-        recipes: 89,
-        followers: '45.2K',
-        isFollowing: true,
-      ),
-      UserModel(
-        id: '4',
-        name: 'Tarla Dalal',
-        username: '@tarladalal',
-        imageUrl: 'https://randomuser.me/api/portraits/women/14.jpg',
-        bio: 'Iconic Indian Chef | Cookbook Author',
-        recipes: 1200,
-        followers: '5.2M',
-        isFollowing: true,
-      ),
-    ];
+  Future<void> loadFollowing(String userId) async {
+    final currentUserId = FirebaseAuth.instance.currentUser!.uid;
+
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('following')
+            .get();
+
+    List<UserModel> temp = [];
+
+    for (var doc in snapshot.docs) {
+      final followingId = doc.id;
+
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(followingId)
+              .get();
+
+      final data = userDoc.data();
+
+      if (data == null) continue;
+
+      // 🔥 CHECK: does THIS user follow me back?
+      final isFollowedBackDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(followingId)
+              .collection('followers')
+              .doc(currentUserId)
+              .get();
+
+      bool isFollowedBack = isFollowedBackDoc.exists;
+
+      temp.add(
+        UserModel(
+          id: followingId,
+          name: data['name'] ?? '',
+          username: data['username'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          bio: data['bio'] ?? '',
+          recipes: data['recipes'] ?? 0,
+          followers: data['followers']?.toString() ?? '0',
+
+          // 🔥 OPTIONAL (you can use for UI badge)
+          isFollowing: true,
+        ),
+      );
+    }
+
+    following.value = temp;
     applyFilter();
   }
 
@@ -169,62 +212,53 @@ class SocialController extends GetxController {
     }
   }
 
-  void toggleFollow(String userId) {
-    if (selectedTab.value == 0) {
-      final index = followers.indexWhere((user) => user.id == userId);
-      if (index != -1) {
-        followers[index].isFollowing = !followers[index].isFollowing;
-        if (followers[index].isFollowing) {
-          followers[index].followers = _incrementCount(
-            followers[index].followers,
-          );
-        } else {
-          followers[index].followers = _decrementCount(
-            followers[index].followers,
-          );
-        }
-        followers.refresh(); // ✅ Fixed: Call refresh on RxList
-        applyFilter();
+  Future<void> toggleFollow(String targetUserId) async {
+    final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-        Get.snackbar(
-          followers[index].isFollowing ? 'Following' : 'Unfollowed',
-          followers[index].isFollowing
-              ? 'You are now following ${followers[index].name}'
-              : 'You unfollowed ${followers[index].name}',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor:
-              followers[index].isFollowing ? Colors.green : Colors.red,
-          colorText: Colors.white,
-        );
-      }
+    final followingRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .collection('following')
+        .doc(targetUserId);
+
+    final followerRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUserId)
+        .collection('followers')
+        .doc(currentUserId);
+
+    final doc = await followingRef.get();
+
+    if (doc.exists) {
+      await followingRef.delete();
+      await followerRef.delete();
     } else {
-      final index = following.indexWhere((user) => user.id == userId);
-      if (index != -1) {
-        following[index].isFollowing = !following[index].isFollowing;
-        if (following[index].isFollowing) {
-          following[index].followers = _incrementCount(
-            following[index].followers,
-          );
-        } else {
-          following[index].followers = _decrementCount(
-            following[index].followers,
-          );
-        }
-        following.refresh(); // ✅ Fixed: Call refresh on RxList
-        applyFilter();
+      try {
+        await followingRef.set({
+          'followingId': targetUserId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
 
-        Get.snackbar(
-          following[index].isFollowing ? 'Following' : 'Unfollowed',
-          following[index].isFollowing
-              ? 'You are now following ${following[index].name}'
-              : 'You unfollowed ${following[index].name}',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor:
-              following[index].isFollowing ? Colors.green : Colors.red,
-          colorText: Colors.white,
-        );
+        await followerRef.set({
+          'followerId': currentUserId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        print("FOLLOW SUCCESS");
+      } catch (e) {
+        print("FOLLOW ERROR => $e");
       }
     }
+    await loadFollowers(currentUserId);
+    await loadFollowing(currentUserId);
+    await loadMyFollowers(currentUserId);
+
+    applyFilter();
+    update();
+
+    print("Followers count => ${followers.length}");
+    print("Following count => ${following.length}");
+    print("My followers => ${myFollowersSet.length}");
   }
 
   String _incrementCount(String count) {
@@ -253,4 +287,3 @@ class SocialController extends GetxController {
     Get.toNamed('/user-profile', arguments: user);
   }
 }
-

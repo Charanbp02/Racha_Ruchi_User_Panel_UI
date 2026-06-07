@@ -1,3 +1,4 @@
+// lib/App/Modules/AddressBook/view/add_edit_address_view.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
@@ -6,6 +7,7 @@ import 'package:racharuchi/App/Modules/AddressBook/controller/address_controller
 
 class AddEditAddressView extends StatelessWidget {
   final AddressModel? address;
+
   AddEditAddressView({super.key, this.address}) {
     if (address != null) {
       _nameController.text = address!.name;
@@ -19,6 +21,7 @@ class AddEditAddressView extends StatelessWidget {
       _pincodeController.text = address!.pincode;
       _countryController.text = address!.country;
       _selectedType.value = address!.type;
+      _isDefault.value = address!.isDefault;
     }
   }
 
@@ -34,10 +37,11 @@ class AddEditAddressView extends StatelessWidget {
   final _pincodeController = TextEditingController();
   final _countryController = TextEditingController();
   final _selectedType = 'Home'.obs;
+  final _isDefault = false.obs;
 
   @override
   Widget build(BuildContext context) {
-    final AddressController controller = Get.find();
+    final AddressController controller = Get.find<AddressController>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -93,8 +97,12 @@ class AddEditAddressView extends StatelessWidget {
                 controller: _nameController,
                 label: 'Full Name',
                 icon: Iconsax.user,
-                validator:
-                    (value) => value!.isEmpty ? 'Please enter name' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter name';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -104,9 +112,12 @@ class AddEditAddressView extends StatelessWidget {
                 label: 'Phone Number',
                 icon: Iconsax.call,
                 keyboardType: TextInputType.phone,
-                validator:
-                    (value) =>
-                        value!.isEmpty ? 'Please enter phone number' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter phone number';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -124,8 +135,12 @@ class AddEditAddressView extends StatelessWidget {
                 controller: _addressLine1Controller,
                 label: 'Address Line 1',
                 icon: Iconsax.location,
-                validator:
-                    (value) => value!.isEmpty ? 'Please enter address' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter address';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -153,9 +168,12 @@ class AddEditAddressView extends StatelessWidget {
                       controller: _cityController,
                       label: 'City',
                       icon: Iconsax.building,
-                      validator:
-                          (value) =>
-                              value!.isEmpty ? 'Please enter city' : null,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter city';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -164,9 +182,12 @@ class AddEditAddressView extends StatelessWidget {
                       controller: _stateController,
                       label: 'State',
                       icon: Iconsax.building,
-                      validator:
-                          (value) =>
-                              value!.isEmpty ? 'Please enter state' : null,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter state';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -182,9 +203,12 @@ class AddEditAddressView extends StatelessWidget {
                       label: 'Pincode',
                       icon: Iconsax.location,
                       keyboardType: TextInputType.number,
-                      validator:
-                          (value) =>
-                              value!.isEmpty ? 'Please enter pincode' : null,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter pincode';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -193,66 +217,107 @@ class AddEditAddressView extends StatelessWidget {
                       controller: _countryController,
                       label: 'Country',
                       icon: Iconsax.flag,
-                      validator:
-                          (value) =>
-                              value!.isEmpty ? 'Please enter country' : null,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter country';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // Set as Default
+              Obx(
+                () => Row(
+                  children: [
+                    Checkbox(
+                      value: _isDefault.value,
+                      onChanged: (value) => _isDefault.value = value ?? false,
+                      activeColor: const Color(0xFFE53935),
+                    ),
+                    const Text(
+                      'Set as default address',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 30),
 
               // Save Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      final newAddress = AddressModel(
-                        id: address?.id ?? DateTime.now().toString(),
-                        type: _selectedType.value,
-                        name: _nameController.text,
-                        phone: _phoneController.text,
-                        alternatePhone:
-                            _altPhoneController.text.isNotEmpty
-                                ? _altPhoneController.text
-                                : null,
-                        addressLine1: _addressLine1Controller.text,
-                        addressLine2:
-                            _addressLine2Controller.text.isNotEmpty
-                                ? _addressLine2Controller.text
-                                : null,
-                        landmark:
-                            _landmarkController.text.isNotEmpty
-                                ? _landmarkController.text
-                                : null,
-                        city: _cityController.text,
-                        state: _stateController.text,
-                        pincode: _pincodeController.text,
-                        country: _countryController.text,
-                        isDefault: address?.isDefault ?? false,
-                      );
+              Obx(
+                () => SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed:
+                        controller.isLoading.value
+                            ? null
+                            : () {
+                              if (_formKey.currentState!.validate()) {
+                                final newAddress = AddressModel(
+                                  id: address?.id ?? '',
+                                  type: _selectedType.value,
+                                  name: _nameController.text,
+                                  phone: _phoneController.text,
+                                  alternatePhone:
+                                      _altPhoneController.text.isNotEmpty
+                                          ? _altPhoneController.text
+                                          : null,
+                                  addressLine1: _addressLine1Controller.text,
+                                  addressLine2:
+                                      _addressLine2Controller.text.isNotEmpty
+                                          ? _addressLine2Controller.text
+                                          : null,
+                                  landmark:
+                                      _landmarkController.text.isNotEmpty
+                                          ? _landmarkController.text
+                                          : null,
+                                  city: _cityController.text,
+                                  state: _stateController.text,
+                                  pincode: _pincodeController.text,
+                                  country: _countryController.text,
+                                  isDefault: _isDefault.value,
+                                  createdAt:
+                                      address?.createdAt ?? DateTime.now(),
+                                  updatedAt: DateTime.now(),
+                                );
 
-                      if (address == null) {
-                        controller.addAddress(newAddress);
-                      } else {
-                        controller.editAddress(newAddress);
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                                if (address == null) {
+                                  controller.addAddress(newAddress);
+                                } else {
+                                  controller.editAddress(newAddress);
+                                }
+                              }
+                            },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    address == null ? 'Add Address' : 'Update Address',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    child:
+                        controller.isLoading.value
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : Text(
+                              address == null
+                                  ? 'Add Address'
+                                  : 'Update Address',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                   ),
                 ),
               ),

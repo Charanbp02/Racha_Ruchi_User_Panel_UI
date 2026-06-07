@@ -1,8 +1,9 @@
+// lib/App/Modules/AddressBook/view/address_book_view.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:racharuchi/App/Models/Address_Book_Model/address_book_model.dart';
-import '../controller/address_controller.dart';
+import 'package:racharuchi/App/Modules/AddressBook/controller/address_controller.dart';
 
 class AddressBookView extends StatelessWidget {
   const AddressBookView({super.key});
@@ -29,33 +30,31 @@ class AddressBookView extends StatelessWidget {
           icon: const Icon(Iconsax.arrow_left, color: Color(0xFF2D2D2D)),
           onPressed: () => Get.back(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.add, color: Color(0xFFE53935)),
-            onPressed: () => controller.showAddAddressForm(),
-          ),
-        ],
       ),
-      body: Obx(() {
-        if (controller.isLoading.value) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFFE53935)),
+      body: RefreshIndicator(
+        onRefresh: controller.refreshAddresses,
+        color: const Color(0xFFE53935),
+        child: Obx(() {
+          if (controller.isLoading.value && controller.addresses.isEmpty) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53935)),
+            );
+          }
+
+          if (controller.addresses.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: controller.addresses.length,
+            itemBuilder: (context, index) {
+              final address = controller.addresses[index];
+              return _buildAddressCard(address, controller);
+            },
           );
-        }
-
-        if (controller.addresses.isEmpty) {
-          return _buildEmptyState();
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: controller.addresses.length,
-          itemBuilder: (context, index) {
-            final address = controller.addresses[index];
-            return _buildAddressCard(address, controller);
-          },
-        );
-      }),
+        }),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => controller.showAddAddressForm(),
         backgroundColor: const Color(0xFFE53935),
@@ -295,12 +294,26 @@ class AddressBookView extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (!address.isDefault)
-                  TextButton.icon(
-                    onPressed: () => controller.setDefaultAddress(address.id),
-                    icon: const Icon(Iconsax.tick_circle, size: 18),
-                    label: const Text('Set as Default'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFE53935),
+                  Obx(
+                    () => TextButton.icon(
+                      onPressed:
+                          controller.isSyncing.value
+                              ? null
+                              : () => controller.setDefaultAddress(address.id),
+                      icon:
+                          controller.isSyncing.value
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Iconsax.tick_circle, size: 18),
+                      label: const Text('Set as Default'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFE53935),
+                      ),
                     ),
                   ),
                 const SizedBox(width: 8),

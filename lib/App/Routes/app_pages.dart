@@ -4,6 +4,7 @@ import 'package:racharuchi/App/Modules/AIChat/view/ai_chat_view.dart';
 import 'package:racharuchi/App/Modules/About/binding/about_binding.dart';
 import 'package:racharuchi/App/Modules/About/view/about_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/binding/address_binding.dart';
+import 'package:racharuchi/App/Modules/AddressBook/view/add_edit_address_view.dart';
 import 'package:racharuchi/App/Modules/AddressBook/view/address_view.dart';
 import 'package:racharuchi/App/Modules/All_Videos/binding/videos_binding.dart';
 import 'package:racharuchi/App/Modules/All_Videos/view/videos_view.dart';
@@ -30,6 +31,8 @@ import 'package:racharuchi/App/Modules/My_Recipes/binding/my_recipes_binding.dar
 import 'package:racharuchi/App/Modules/My_Recipes/view/my_recipes_view.dart';
 import 'package:racharuchi/App/Modules/Notifications/binding/notification_binding.dart';
 import 'package:racharuchi/App/Modules/Notifications/view/notification_view.dart';
+import 'package:racharuchi/App/Modules/Product_Details/binding/product_details_binding.dart';
+import 'package:racharuchi/App/Modules/Product_Details/views/product_details_view.dart';
 import 'package:racharuchi/App/Modules/Products/binding/products_binding.dart';
 import 'package:racharuchi/App/Modules/Products/view/products_view.dart';
 import 'package:racharuchi/App/Modules/Profile/binding/profile_binding.dart';
@@ -123,6 +126,10 @@ class AppPages {
       binding: CouponsBinding(),
     ),
     GetPage(
+      name: Routes.ADD_EDIT_ADDRESS,
+      page: () => AddEditAddressView(address: Get.arguments),
+    ),
+    GetPage(
       name: Routes.ADDRESS_BOOK,
       page: () => const AddressBookView(),
       binding: AddressBinding(),
@@ -167,6 +174,11 @@ class AppPages {
       name: Routes.ABOUT_US,
       page: () => const AboutView(),
       binding: AboutBinding(),
+    ),
+    GetPage(
+      name: Routes.PRODUCT_DETAILS,
+      page: () => const ProductDetailsView(),
+      binding: ProductDetailsBinding(),
     ),
   ];
 }

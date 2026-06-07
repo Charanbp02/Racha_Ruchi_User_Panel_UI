@@ -1,3 +1,4 @@
+// lib/App/Modules/Cart/view/cart_view.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
@@ -15,12 +16,14 @@ class CartView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text(
-          'My Cart',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Color(0xFF2D2D2D),
+        title: Obx(
+          () => Text(
+            'My Cart (${controller.totalItems})',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: Color(0xFF2D2D2D),
+            ),
           ),
         ),
         backgroundColor: Colors.white,
@@ -31,9 +34,12 @@ class CartView extends StatelessWidget {
           onPressed: () => Get.back(),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Iconsax.trash, color: Color(0xFFE53935)),
-            onPressed: () => controller.clearCart(),
+          Obx(
+            () => IconButton(
+              icon: const Icon(Iconsax.trash, color: Color(0xFFE53935)),
+              onPressed:
+                  controller.cartItems.isEmpty ? null : controller.clearCart,
+            ),
           ),
         ],
       ),
@@ -195,15 +201,23 @@ class CartView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
 
-                // Product Name
+                // Product Name with Weight Variant
                 Text(
-                  item.name,
+                  item.displayName,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                   maxLines: 2,
                 ),
+                const SizedBox(height: 4),
+
+                // Brand/Category
+                if (item.brand != null && item.brand!.isNotEmpty)
+                  Text(
+                    item.brand!,
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                  ),
                 const SizedBox(height: 4),
 
                 // Price
@@ -270,69 +284,84 @@ class CartView extends StatelessWidget {
   }
 
   Widget _buildBottomSummary(CartController controller) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 10,
-            offset: const Offset(0, -3),
+    return Obx(
+      () => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Coupon Section
-            _buildCouponSection(controller),
-            const SizedBox(height: 16),
-
-            // Price Details
-            _buildPriceDetail(
-              'Subtotal',
-              '₹${controller.getSubtotal().toStringAsFixed(2)}',
-            ),
-            _buildPriceDetail(
-              'Delivery Charge',
-              '₹${controller.deliveryCharge.value.toStringAsFixed(2)}',
-            ),
-            _buildPriceDetail(
-              'Tax (5%)',
-              '₹${controller.getTax().toStringAsFixed(2)}',
-            ),
-            const Divider(height: 16),
-            _buildPriceDetail(
-              'Total',
-              '₹${controller.getTotal().toStringAsFixed(2)}',
-              isTotal: true,
-            ),
-            const SizedBox(height: 16),
-
-            // Checkout Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => controller.proceedToCheckout(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Proceed to Checkout',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade200,
+              blurRadius: 10,
+              offset: const Offset(0, -3),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Coupon Section
+              _buildCouponSection(controller),
+              const SizedBox(height: 16),
+
+              // Price Details
+              _buildPriceDetail(
+                'Subtotal (${controller.totalItems} items)',
+                '₹${controller.getSubtotal().toStringAsFixed(2)}',
+              ),
+              _buildPriceDetail(
+                'Delivery Charge',
+                controller.deliveryCharge.value == 0
+                    ? 'Free'
+                    : '₹${controller.deliveryCharge.value.toStringAsFixed(2)}',
+              ),
+              _buildPriceDetail(
+                'Tax (${controller.taxPercentage.value}%)',
+                '₹${controller.getTax().toStringAsFixed(2)}',
+              ),
+
+              // Discount section (if coupon applied)
+              if (controller.discountAmount.value > 0) ...[
+                const Divider(height: 16),
+                _buildPriceDetail(
+                  'Discount (${controller.appliedCoupon.value})',
+                  '-₹${controller.discountAmount.value.toStringAsFixed(2)}',
+                  isDiscount: true,
+                ),
+              ],
+
+              const Divider(height: 16),
+              _buildPriceDetail(
+                'Total',
+                '₹${controller.getTotal().toStringAsFixed(2)}',
+                isTotal: true,
+              ),
+              const SizedBox(height: 16),
+
+              // Checkout Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => controller.proceedToCheckout(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Proceed to Checkout',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -341,44 +370,75 @@ class CartView extends StatelessWidget {
   Widget _buildCouponSection(CartController controller) {
     final TextEditingController couponController = TextEditingController();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE53935).withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE53935).withValues(alpha: 0.2),
+    return Obx(
+      () => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE53935).withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFE53935).withValues(alpha: 0.2),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Iconsax.discount_circle,
-            color: Color(0xFFE53935),
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: couponController,
-              decoration: const InputDecoration(
-                hintText: 'Enter coupon code',
-                border: InputBorder.none,
-                hintStyle: TextStyle(fontSize: 12),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              controller.applyCoupon(couponController.text);
-              couponController.clear();
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE53935),
-            ),
-            child: const Text('Apply'),
-          ),
-        ],
+        child:
+            controller.appliedCoupon.value.isNotEmpty
+                ? Row(
+                  children: [
+                    const Icon(
+                      Iconsax.discount_circle,
+                      color: Color(0xFFE53935),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Coupon applied: ${controller.appliedCoupon.value}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFFE53935),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: controller.removeCoupon,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFE53935),
+                      ),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                )
+                : Row(
+                  children: [
+                    const Icon(
+                      Iconsax.discount_circle,
+                      color: Color(0xFFE53935),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: couponController,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter coupon code',
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        controller.applyCoupon(couponController.text);
+                        couponController.clear();
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFE53935),
+                      ),
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -387,6 +447,7 @@ class CartView extends StatelessWidget {
     String title,
     String amount, {
     bool isTotal = false,
+    bool isDiscount = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -406,7 +467,12 @@ class CartView extends StatelessWidget {
             style: TextStyle(
               fontSize: isTotal ? 18 : 14,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-              color: isTotal ? const Color(0xFFE53935) : Colors.grey.shade700,
+              color:
+                  isDiscount
+                      ? Colors.green
+                      : (isTotal
+                          ? const Color(0xFFE53935)
+                          : Colors.grey.shade700),
             ),
           ),
         ],

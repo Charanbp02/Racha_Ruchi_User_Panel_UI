@@ -12,16 +12,9 @@ class SocialView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final SocialController controller = Get.put(SocialController());
-
-    // Set initial tab based on parameter
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (showFollowers) {
-        controller.selectedTab.value = 0;
-      } else {
-        controller.selectedTab.value = 1;
-      }
-    });
+    final SocialController controller = Get.put(
+      SocialController(initialTab: showFollowers ? 0 : 1),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -47,11 +40,11 @@ class SocialView extends StatelessWidget {
           preferredSize: const Size.fromHeight(110),
           child: Column(
             children: [
-              // Search Bar
               _buildSearchBar(controller),
               const SizedBox(height: 8),
-              // Tab Bar
-              _buildTabBar(controller),
+
+              Obx(() => _buildTabBar(controller)),
+
               const SizedBox(height: 8),
             ],
           ),
@@ -257,38 +250,6 @@ class SocialView extends StatelessWidget {
                           color: Color(0xFF666666),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Iconsax.document,
-                            size: 10,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${user.recipes}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Iconsax.heart,
-                            size: 10,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            user.followers,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -315,11 +276,11 @@ class SocialView extends StatelessWidget {
                       padding: EdgeInsets.zero,
                     ),
                     child: Text(
-                      user.isFollowing ? 'Following' : 'Follow',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      user.isFollowing
+                          ? 'Following'
+                          : controller.myFollowersSet.contains(user.id)
+                          ? 'Follow Back'
+                          : 'Follow',
                     ),
                   ),
                 ),
