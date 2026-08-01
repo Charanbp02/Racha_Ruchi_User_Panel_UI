@@ -26,19 +26,15 @@ class OrderView extends StatelessWidget {
         centerTitle: false,
         leading: IconButton(
           icon: const Icon(Iconsax.arrow_left, color: Color(0xFF2D2D2D)),
-          onPressed: () => Get.back(),
+          onPressed: () {
+            Get.offAllNamed('/bottom-bar');
+          },
         ),
         actions: [
           IconButton(
             icon: const Icon(Iconsax.search_normal, color: Color(0xFF2D2D2D)),
             onPressed: () {
               // Search functionality
-            },
-          ),
-          IconButton(
-            icon: const Icon(Iconsax.filter, color: Color(0xFF2D2D2D)),
-            onPressed: () {
-              // Filter functionality
             },
           ),
         ],

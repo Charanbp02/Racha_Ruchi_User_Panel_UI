@@ -54,7 +54,7 @@ class CartItemModel {
   // Get display name with variant info
   String get displayName {
     if (selectedWeight != null && selectedWeight!.isNotEmpty) {
-      return '$name (${selectedWeight})';
+      return '$name ($selectedWeight)';
     }
     return name;
   }

@@ -1,70 +1,36 @@
+// lib/App/Modules/Home/view/home_view.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
-import 'package:racharuchi/App/Custom/appBar.dart';
-import 'package:racharuchi/App/Modules/All_Videos/view/videos_view.dart';
-import 'package:racharuchi/App/Modules/Banner/view/hero_banner_view.dart';
-import 'package:racharuchi/App/Modules/Categories/view/category_view.dart';
-import 'package:racharuchi/App/Modules/Home/Controller/Home_Controller.dart';
-import 'package:racharuchi/App/Modules/Search/view/search_bar_view.dart';
-import 'package:racharuchi/App/Modules/AIChat/view/ai_chat_view.dart';
-import 'package:racharuchi/App/Modules/AIChat/binding/ai_chat_binding.dart';
+import 'package:racharuchi/App/Modules/Home/Controller/home_controller.dart';
+import 'package:racharuchi/App/Modules/Home/widgets/ai_chat_button.dart';
+import 'package:racharuchi/App/Modules/Home/widgets/home_body.dart';
+import 'package:racharuchi/App/Modules/Home/widgets/home_header.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: const CustomAppBar(title: "Racha Ruchi"),
-      body: Column(
-        children: [
-          // SearchBar - Fixed
-          const SearchBarView(),
-          const SizedBox(height: 5),
+    // Ensure controller is initialized
+    if (!Get.isRegistered<HomeController>()) {
+      Get.put(HomeController());
+    }
 
-          // Scrollable content
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CategorySectionView(),
-                  const SizedBox(height: 16),
-
-                  const HeroBannerView(),
-
-                  // Embedded VideosView
-                  VideosView(embedded: true),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Add haptic feedback for better UX
-          HapticFeedback.lightImpact();
-
-          // Navigate to AI Chat
-          Get.to(
-            () => const AIChatView(),
-            binding: AIChatBinding(),
-            transition: Transition.rightToLeft,
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-        backgroundColor: const Color(0xFFE53935),
-        elevation: 4,
-        tooltip: 'AI Recipe Assistant',
-        child: const Icon(Iconsax.magicpen, color: Colors.white, size: 28),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        appBar: const HomeHeader(),
+        body: const HomeBody(),
+        floatingActionButton: const AIChatButton(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

@@ -19,6 +19,9 @@ import 'package:racharuchi/App/Modules/Cart/binding/cart_binding.dart';
 import 'package:racharuchi/App/Modules/Cart/view/cart_view.dart';
 import 'package:racharuchi/App/Modules/Categories/binding/category_binding.dart';
 import 'package:racharuchi/App/Modules/Categories/view/category_view.dart';
+import 'package:racharuchi/App/Modules/CategoryVideos/view/category_videos_view.dart';
+import 'package:racharuchi/App/Modules/Checkout/binding/checkout_binding.dart';
+import 'package:racharuchi/App/Modules/Checkout/view/checkout_view.dart';
 import 'package:racharuchi/App/Modules/Coupons/binding/coupons_binding.dart';
 import 'package:racharuchi/App/Modules/Coupons/view/coupons_view.dart';
 import 'package:racharuchi/App/Modules/HelpSupport/binding/help_support_binding.dart';
@@ -179,6 +182,22 @@ class AppPages {
       name: Routes.PRODUCT_DETAILS,
       page: () => const ProductDetailsView(),
       binding: ProductDetailsBinding(),
+      transition: Transition.fadeIn,
+    ),
+
+    GetPage(
+      name: Routes.CATEGORY_VIDEOS,
+      page: () => const CategoryVideosView(),
+    ),
+    GetPage(
+      name: Routes.ORDERS,
+      page: () => const OrderView(),
+      binding: OrderBinding(),
+    ),
+    GetPage(
+      name: Routes.CHECKOUT,
+      page: () => const CheckoutView(),
+      binding: CheckoutBinding(),
     ),
   ];
 }

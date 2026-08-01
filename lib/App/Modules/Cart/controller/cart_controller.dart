@@ -1,4 +1,6 @@
 // lib/App/Modules/Cart/controller/cart_controller.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,18 +16,134 @@ class CartController extends GetxController {
   var isLoading = false.obs;
   var isUpdating = false.obs;
   var selectedAddress = 0.obs;
-  var deliveryCharge = 40.0.obs;
-  var taxPercentage = 5.0.obs;
-  var discountAmount = 0.0.obs;
-  var appliedCoupon = ''.obs;
+
+  // Store settings from Firebase with real-time updates
+  var deliveryCharge = 0.0.obs;
+  var minimumOrderAmount = 0.0.obs;
+  var freeDeliveryAbove = 0.0.obs;
+
+  // Stream subscriptions
+  Stream<QuerySnapshot>? _cartStream;
+  StreamSubscription<QuerySnapshot>? _cartSubscription;
+  StreamSubscription<DocumentSnapshot>? _storeSubscription; // ✅ New
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
 
+  // Get total cart items count for badge
+  int get cartItemCount {
+    int total = 0;
+    for (var item in cartItems) {
+      total += item.quantity;
+    }
+    return total;
+  }
+
   @override
   void onInit() {
     super.onInit();
+    _setupStoreListener(); // ✅ Real-time store settings
+    _setupAuthListener();
     loadCartItems();
+  }
+
+  @override
+  void onClose() {
+    _cartSubscription?.cancel();
+    _storeSubscription?.cancel(); // ✅ Clean up
+    super.onClose();
+  }
+
+  // ✅ Real-time store settings listener
+  void _setupStoreListener() {
+    // Cancel existing subscription
+    _storeSubscription?.cancel();
+
+    // Listen to store config changes in real-time
+    _storeSubscription = _firestore
+        .collection('stores')
+        .doc('config')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (snapshot.exists) {
+              final data = snapshot.data()!;
+
+              deliveryCharge.value = (data['deliveryCharge'] ?? 0).toDouble();
+              minimumOrderAmount.value =
+                  (data['minimumOrderAmount'] ?? 0).toDouble();
+              freeDeliveryAbove.value =
+                  (data['freeDeliveryAbove'] ?? 0).toDouble();
+
+              print('🔄 Store settings updated in real-time:');
+              print('   📦 Delivery: ₹$deliveryCharge');
+              print('   📋 Min Order: ₹$minimumOrderAmount');
+              print('   🆓 Free Delivery Above: ₹$freeDeliveryAbove');
+
+              // Update UI
+              update();
+            } else {
+              print('⚠️ Store config not found, using default values');
+              // Set fallback values
+              deliveryCharge.value = 40.0;
+              minimumOrderAmount.value = 0.0;
+              freeDeliveryAbove.value = 0.0;
+            }
+          },
+          onError: (error) {
+            print('❌ Real-time store settings error: $error');
+            // Set fallback values on error
+            deliveryCharge.value = 40.0;
+            minimumOrderAmount.value = 0.0;
+            freeDeliveryAbove.value = 0.0;
+          },
+        );
+  }
+
+  // Listen to auth changes
+  void _setupAuthListener() {
+    _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        // User logged in, setup real-time sync
+        setupRealTimeSync();
+      } else {
+        // User logged out, clear cart
+        _cartSubscription?.cancel();
+        cartItems.clear();
+      }
+    });
+  }
+
+  // Setup real-time Firebase sync for cart
+  void setupRealTimeSync() {
+    if (currentUserId == null) return;
+
+    // Cancel existing subscription
+    _cartSubscription?.cancel();
+
+    // Setup new real-time listener
+    _cartSubscription = _firestore
+        .collection('carts')
+        .doc(currentUserId)
+        .collection('items')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final items =
+                snapshot.docs.map((doc) {
+                  return CartItemModel.fromJson(doc.data());
+                }).toList();
+
+            cartItems.assignAll(items);
+            print('🔄 Cart synced in real-time: ${items.length} items');
+
+            // Update cart count in UI
+            update();
+          },
+          onError: (error) {
+            print('❌ Real-time sync error: $error');
+          },
+        );
   }
 
   // Load cart items from Firebase
@@ -52,6 +170,9 @@ class CartController extends GetxController {
 
       cartItems.assignAll(items);
       print('✅ Loaded ${cartItems.length} items from cart');
+
+      // Setup real-time sync after initial load
+      setupRealTimeSync();
     } catch (e) {
       print('❌ Error loading cart: $e');
       _showSnackbar('Error', 'Failed to load cart items', isError: true);
@@ -95,9 +216,6 @@ class CartController extends GetxController {
           selectedWeight,
         );
 
-        cartItems[existingItemIndex].quantity = newQuantity;
-        cartItems.refresh();
-
         _showSnackbar(
           'Cart Updated',
           '${product.name} quantity increased to $newQuantity',
@@ -111,14 +229,13 @@ class CartController extends GetxController {
           quantity: quantity,
           imageUrl: product.mainImage,
           restaurant: product.brand,
-          isVeg: true, // You can determine based on product category
+          isVeg: true,
           selectedWeight: selectedWeight,
           category: product.category,
           brand: product.brand,
         );
 
         await _addCartItemToFirebase(cartItem);
-        cartItems.add(cartItem);
 
         _showSnackbar(
           'Added to Cart',
@@ -175,11 +292,6 @@ class CartController extends GetxController {
         newQuantity,
         item.selectedWeight,
       );
-
-      cartItems[index].quantity = newQuantity;
-      cartItems.refresh();
-
-      _saveToStorage();
     } catch (e) {
       print('❌ Error incrementing quantity: $e');
     } finally {
@@ -203,14 +315,9 @@ class CartController extends GetxController {
           newQuantity,
           item.selectedWeight,
         );
-
-        cartItems[index].quantity = newQuantity;
-        cartItems.refresh();
       } else {
         await removeItem(index);
       }
-
-      _saveToStorage();
     } catch (e) {
       print('❌ Error decrementing quantity: $e');
     } finally {
@@ -244,8 +351,6 @@ class CartController extends GetxController {
                     .doc('${item.id}_${item.selectedWeight ?? 'default'}')
                     .delete();
 
-                cartItems.removeAt(index);
-                _saveToStorage();
                 _showSnackbar('Removed', 'Item removed from cart');
               } catch (e) {
                 print('❌ Error removing item: $e');
@@ -302,11 +407,6 @@ class CartController extends GetxController {
                 }
                 await batch.commit();
 
-                cartItems.clear();
-                discountAmount.value = 0;
-                appliedCoupon.value = '';
-
-                _saveToStorage();
                 _showSnackbar('Cleared', 'Cart cleared successfully');
               } catch (e) {
                 print('❌ Error clearing cart: $e');
@@ -328,26 +428,7 @@ class CartController extends GetxController {
     );
   }
 
-  // Sync cart with Firebase (real-time)
-  void syncCartWithFirebase() {
-    if (currentUserId == null) return;
-
-    _firestore
-        .collection('carts')
-        .doc(currentUserId)
-        .collection('items')
-        .snapshots()
-        .listen((snapshot) {
-          final items =
-              snapshot.docs.map((doc) {
-                return CartItemModel.fromJson(doc.data());
-              }).toList();
-
-          cartItems.assignAll(items);
-          print('🔄 Cart synced: ${items.length} items');
-        });
-  }
-
+  // Calculate subtotal
   double getSubtotal() {
     double total = 0;
     for (var item in cartItems) {
@@ -356,17 +437,21 @@ class CartController extends GetxController {
     return total;
   }
 
-  double getTax() {
-    return (getSubtotal() * taxPercentage.value) / 100;
+  // Calculate delivery charge with free delivery logic
+  double getDeliveryCharge() {
+    if (getSubtotal() >= freeDeliveryAbove.value &&
+        freeDeliveryAbove.value > 0) {
+      return 0;
+    }
+    return deliveryCharge.value;
   }
 
+  // Calculate total (TAX REMOVED)
   double getTotal() {
-    return getSubtotal() +
-        deliveryCharge.value +
-        getTax() -
-        discountAmount.value;
+    return getSubtotal() + getDeliveryCharge();
   }
 
+  // Get total number of items
   int get totalItems {
     int total = 0;
     for (var item in cartItems) {
@@ -375,58 +460,7 @@ class CartController extends GetxController {
     return total;
   }
 
-  void applyCoupon(String couponCode) {
-    if (couponCode.isEmpty) {
-      _showSnackbar('Error', 'Please enter a coupon code', isError: true);
-      return;
-    }
-
-    if (appliedCoupon.value == couponCode) {
-      _showSnackbar(
-        'Already Applied',
-        'This coupon is already applied',
-        isError: true,
-      );
-      return;
-    }
-
-    // Coupon validation logic
-    if (couponCode.toUpperCase() == 'SAVE20') {
-      discountAmount.value = 20.0;
-      appliedCoupon.value = couponCode.toUpperCase();
-      _showSnackbar(
-        'Coupon Applied!',
-        'You saved ₹${discountAmount.value.toStringAsFixed(2)}',
-      );
-    } else if (couponCode.toUpperCase() == 'SAVE10') {
-      discountAmount.value = 10.0;
-      appliedCoupon.value = couponCode.toUpperCase();
-      _showSnackbar(
-        'Coupon Applied!',
-        'You saved ₹${discountAmount.value.toStringAsFixed(2)}',
-      );
-    } else if (couponCode.toUpperCase() == 'FREEDELIVERY') {
-      deliveryCharge.value = 0;
-      appliedCoupon.value = couponCode.toUpperCase();
-      _showSnackbar('Coupon Applied!', 'Free delivery applied');
-    } else {
-      _showSnackbar(
-        'Invalid Coupon',
-        'Please enter a valid coupon code',
-        isError: true,
-      );
-    }
-  }
-
-  void removeCoupon() {
-    if (appliedCoupon.value.isNotEmpty) {
-      discountAmount.value = 0;
-      deliveryCharge.value = 40.0;
-      appliedCoupon.value = '';
-      _showSnackbar('Coupon Removed', 'Coupon has been removed');
-    }
-  }
-
+  // Proceed to checkout with validation
   void proceedToCheckout() {
     if (cartItems.isEmpty) {
       _showSnackbar(
@@ -437,24 +471,27 @@ class CartController extends GetxController {
       return;
     }
 
+    if (getSubtotal() < minimumOrderAmount.value &&
+        minimumOrderAmount.value > 0) {
+      _showSnackbar(
+        'Minimum Order Required',
+        'Minimum order amount is ₹${minimumOrderAmount.value.toStringAsFixed(2)}',
+        isError: true,
+      );
+      return;
+    }
+
     Get.toNamed(
       '/checkout',
       arguments: {
         'items': cartItems,
         'subtotal': getSubtotal(),
-        'deliveryCharge': deliveryCharge.value,
-        'tax': getTax(),
-        'discount': discountAmount.value,
+        'deliveryCharge': getDeliveryCharge(),
         'total': getTotal(),
-        'coupon': appliedCoupon.value,
+        'minimumOrderAmount': minimumOrderAmount.value,
+        'freeDeliveryAbove': freeDeliveryAbove.value,
       },
     );
-  }
-
-  void _saveToStorage() {
-    // Save to local storage for offline access
-    // You can implement SharedPreferences or GetStorage here
-    print('Cart saved locally: ${cartItems.length} items');
   }
 
   void _showSnackbar(String title, String message, {bool isError = false}) {

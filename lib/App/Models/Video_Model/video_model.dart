@@ -1,6 +1,7 @@
 // lib/App/Models/Video_Model/video_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 class VideoModel {
   final String id;
@@ -11,6 +12,11 @@ class VideoModel {
   final String channelId;
   final String channelName;
   final String channelAvatar;
+
+  // ✅ Add these fields
+  final String categoryId;
+  final String subcategory;
+
   final int views;
   final int likes;
   final int comments;
@@ -25,6 +31,10 @@ class VideoModel {
   final double rating;
   final VideoStatus status;
 
+  // Reactive properties for instant UI updates
+  var isLiked = false.obs;
+  var isNew = false.obs;
+
   VideoModel({
     required this.id,
     required this.title,
@@ -34,6 +44,8 @@ class VideoModel {
     required this.channelId,
     required this.channelName,
     required this.channelAvatar,
+    this.categoryId = '', // ✅ Default empty
+    this.subcategory = '', // ✅ Default empty
     this.views = 0,
     this.likes = 0,
     this.comments = 0,
@@ -52,23 +64,18 @@ class VideoModel {
   factory VideoModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    print('📄 Creating VideoModel from: ${doc.id}');
-    print('   Fields: ${data.keys.join(', ')}');
-
-    final String videoUrl = data['videoUrl'] as String? ?? '';
-    print(
-      '   videoUrl: ${videoUrl.isNotEmpty ? videoUrl.substring(0, videoUrl.length > 60 ? 60 : videoUrl.length) : 'EMPTY'}...',
-    );
-
     return VideoModel(
       id: doc.id,
       title: data['title'] as String? ?? 'Untitled Video',
       description: data['description'] as String? ?? '',
       thumbnailUrl: data['thumbnailUrl'] as String? ?? '',
-      videoUrl: videoUrl,
+      videoUrl: data['videoUrl'] as String? ?? '',
       channelId: data['userId'] as String? ?? '',
       channelName: data['userName'] as String? ?? 'Anonymous Chef',
       channelAvatar: data['userImage'] as String? ?? '',
+      // ✅ Parse categoryId and subcategory
+      categoryId: data['categoryId'] as String? ?? '',
+      subcategory: data['subcategory'] as String? ?? '',
       views: data['views'] as int? ?? 0,
       likes: data['likes'] as int? ?? 0,
       comments: data['comments'] as int? ?? 0,
@@ -76,7 +83,7 @@ class VideoModel {
       duration: data['durationInSeconds'] as int? ?? 30,
       publishedAt:
           (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      isVerified: false,
+      isVerified: data['isVerified'] as bool? ?? false,
       isPopular: data['isPopular'] as bool? ?? false,
       tags: List<String>.from(data['tags'] ?? []),
       ingredients: List<Map<String, dynamic>>.from(data['ingredients'] ?? []),
@@ -126,6 +133,16 @@ class VideoModel {
     return 'Just now';
   }
 
+  // ✅ Helper to check if video belongs to a category
+  bool belongsToCategory(String categoryId) {
+    return this.categoryId == categoryId;
+  }
+
+  // ✅ Helper to check if video belongs to a subcategory
+  bool belongsToSubcategory(String subcategoryName) {
+    return subcategory == subcategoryName;
+  }
+
   VideoModel copyWith({
     String? id,
     String? title,
@@ -135,6 +152,8 @@ class VideoModel {
     String? channelId,
     String? channelName,
     String? channelAvatar,
+    String? categoryId,
+    String? subcategory,
     int? views,
     int? likes,
     int? comments,
@@ -158,6 +177,8 @@ class VideoModel {
       channelId: channelId ?? this.channelId,
       channelName: channelName ?? this.channelName,
       channelAvatar: channelAvatar ?? this.channelAvatar,
+      categoryId: categoryId ?? this.categoryId,
+      subcategory: subcategory ?? this.subcategory,
       views: views ?? this.views,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,

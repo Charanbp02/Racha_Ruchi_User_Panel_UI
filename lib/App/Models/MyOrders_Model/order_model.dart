@@ -1,4 +1,5 @@
-// lib/app/Modules/Orders/models/order_model.dart
+// order_model.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
@@ -14,6 +15,11 @@ class OrderModel {
   final String estimatedDelivery;
   final String? trackingNumber;
   final bool isRated;
+  final double? rating;
+  final String? review;
+  final DateTime? lastUpdated;
+  final DateTime? cancelledAt;
+  final DateTime? deliveredAt;
 
   OrderModel({
     required this.id,
@@ -27,15 +33,62 @@ class OrderModel {
     required this.estimatedDelivery,
     this.trackingNumber,
     this.isRated = false,
+    this.rating,
+    this.review,
+    this.lastUpdated,
+    this.cancelledAt,
+    this.deliveredAt,
   });
+
+  // CopyWith method for updating specific fields
+  OrderModel copyWith({
+    String? id,
+    String? orderNumber,
+    DateTime? orderDate,
+    double? totalAmount,
+    String? status,
+    List<OrderItem>? items,
+    String? paymentMethod,
+    String? deliveryAddress,
+    String? estimatedDelivery,
+    String? trackingNumber,
+    bool? isRated,
+    double? rating,
+    String? review,
+    DateTime? lastUpdated,
+    DateTime? cancelledAt,
+    DateTime? deliveredAt,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      orderDate: orderDate ?? this.orderDate,
+      totalAmount: totalAmount ?? this.totalAmount,
+      status: status ?? this.status,
+      items: items ?? this.items,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      estimatedDelivery: estimatedDelivery ?? this.estimatedDelivery,
+      trackingNumber: trackingNumber ?? this.trackingNumber,
+      isRated: isRated ?? this.isRated,
+      rating: rating ?? this.rating,
+      review: review ?? this.review,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+    );
+  }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
       id: json['id'] ?? '',
       orderNumber: json['orderNumber'] ?? '',
-      orderDate: DateTime.parse(
-        json['orderDate'] ?? DateTime.now().toIso8601String(),
-      ),
+      orderDate:
+          json['orderDate'] is Timestamp
+              ? (json['orderDate'] as Timestamp).toDate()
+              : DateTime.parse(
+                json['orderDate'] ?? DateTime.now().toIso8601String(),
+              ),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
       status: json['status'] ?? 'pending',
       items:
@@ -47,12 +100,25 @@ class OrderModel {
       estimatedDelivery: json['estimatedDelivery'] ?? '',
       trackingNumber: json['trackingNumber'],
       isRated: json['isRated'] ?? false,
+      rating: json['rating']?.toDouble(),
+      review: json['review'],
+      lastUpdated:
+          json['lastUpdated'] is Timestamp
+              ? (json['lastUpdated'] as Timestamp).toDate()
+              : null,
+      cancelledAt:
+          json['cancelledAt'] is Timestamp
+              ? (json['cancelledAt'] as Timestamp).toDate()
+              : null,
+      deliveredAt:
+          json['deliveredAt'] is Timestamp
+              ? (json['deliveredAt'] as Timestamp).toDate()
+              : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'orderNumber': orderNumber,
       'orderDate': orderDate.toIso8601String(),
       'totalAmount': totalAmount,
@@ -63,11 +129,14 @@ class OrderModel {
       'estimatedDelivery': estimatedDelivery,
       'trackingNumber': trackingNumber,
       'isRated': isRated,
+      'rating': rating,
+      'review': review,
+      'lastUpdated': FieldValue.serverTimestamp(),
     };
   }
 
   String get statusText {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'pending':
         return 'Pending';
       case 'confirmed':
@@ -86,7 +155,7 @@ class OrderModel {
   }
 
   Color get statusColor {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFFF9800);
       case 'confirmed':
@@ -105,7 +174,7 @@ class OrderModel {
   }
 
   IconData get statusIcon {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'pending':
         return Iconsax.timer_1;
       case 'confirmed':
@@ -121,6 +190,35 @@ class OrderModel {
       default:
         return Iconsax.bag;
     }
+  }
+
+  String get formattedDate {
+    return '${orderDate.day} ${_getMonthName(orderDate.month)} ${orderDate.year}';
+  }
+
+  String get formattedTime {
+    final hour = orderDate.hour > 12 ? orderDate.hour - 12 : orderDate.hour;
+    final minute = orderDate.minute.toString().padLeft(2, '0');
+    final period = orderDate.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month - 1];
   }
 }
 

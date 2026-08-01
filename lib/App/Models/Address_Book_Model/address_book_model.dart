@@ -128,10 +128,12 @@ class AddressModel {
   String get formattedAddress {
     List<String> parts = [];
     parts.add(addressLine1);
-    if (addressLine2 != null && addressLine2!.isNotEmpty)
+    if (addressLine2 != null && addressLine2!.isNotEmpty) {
       parts.add(addressLine2!);
-    if (landmark != null && landmark!.isNotEmpty)
-      parts.add('Landmark: ${landmark}');
+    }
+    if (landmark != null && landmark!.isNotEmpty) {
+      parts.add('Landmark: $landmark');
+    }
     parts.add('$city, $state - $pincode');
     parts.add(country);
     return parts.join(', ');

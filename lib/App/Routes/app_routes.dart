@@ -33,6 +33,10 @@ abstract class AppRoutes {
   static const SEARCH_RESULTS = Routes.SEARCH_RESULTS;
   static const ABOUT_US = Routes.ABOUT_US;
   static const PRODUCT_DETAILS = Routes.PRODUCT_DETAILS;
+  static const CHECKOUT = 'checkout';
+  static const FORGOT = Routes.FORGOT;
+  static const CATEGORY_VIDEOS = Routes.CATEGORY_VIDEOS;
+  static const ORDERS = Routes.ORDERS;
 }
 
 // routes.dart (ensure all routes are defined)
@@ -55,7 +59,7 @@ abstract class Routes {
   static const PROFILE = '/profile';
   static const NOTIFICATIONS = '/notifications';
   static const CART = '/cart';
-  static const MY_ORDERS = '/orders';
+  static const MY_ORDERS = '/my-orders';
   static const MY_RECIPES = '/my-recipes';
   static const COUPONS = '/coupons';
   static const ADD_EDIT_ADDRESS = '/add-edit-address';
@@ -69,4 +73,11 @@ abstract class Routes {
   static const SEARCH_RESULTS = '/search-results';
   static const ABOUT_US = '/about-us';
   static const PRODUCT_DETAILS = '/product-details';
+  static const CHECKOUT = '/checkout';
+  static const FORGOT = '/forgot-passowrd';
+  static const CATEGORY_VIDEOS = '/category-videos';
+  static const ORDERS = '/order-complated';
+
+  // You can also add route names with parameters
+  static const String addressDetail = '/address-detail/:id';
 }

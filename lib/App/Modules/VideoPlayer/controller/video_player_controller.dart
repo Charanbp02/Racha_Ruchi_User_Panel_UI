@@ -3,13 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:racharuchi/App/Extensions/number_extensions.dart';
+import 'package:racharuchi/App/Modules/VideoPlayer/config/video_player_constants.dart';
 import 'package:racharuchi/App/Modules/VideoPlayer/view/comments_bottom_sheet.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
+// ==================== CONTROLLER ====================
 class VideoPlayerControllerX extends GetxController {
+  // ==================== OBSERVABLES ====================
   VideoPlayerController? videoController;
   final isInitialized = false.obs;
   final isLoading = true.obs;
@@ -18,7 +23,12 @@ class VideoPlayerControllerX extends GetxController {
   final position = Duration.zero.obs;
   final duration = Duration.zero.obs;
   final showControls = true.obs;
+  final bufferedPosition = Duration.zero.obs;
+  final isBuffering = false.obs;
+  final isMuted = false.obs;
+  final volume = 1.0.obs;
 
+  // Social stats
   final isLiked = false.obs;
   final likeCount = 0.obs;
   final commentCount = 0.obs;
@@ -27,7 +37,9 @@ class VideoPlayerControllerX extends GetxController {
   final followerCount = 0.obs;
   final isFollowingLoading = false.obs;
   final hasViewed = false.obs;
+  final animateLike = false.obs;
 
+  // ==================== REQUIRED PARAMS ====================
   final String videoUrl;
   final String videoTitle;
   final String channelName;
@@ -37,20 +49,30 @@ class VideoPlayerControllerX extends GetxController {
   final List<dynamic> ingredients;
   final String userId;
 
-  final animateLike = false.obs;
-
+  // ==================== FIREBASE ====================
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final Connectivity _connectivity = Connectivity();
 
+  // ==================== INTERNAL STATE ====================
   bool _isDisposed = false;
+  bool _isUpdatingView = false;
+  int _retryCount = 0;
+  Timer? _progressTimer;
+  Timer? _hideControlsTimer;
+  Timer? _bufferingTimer;
+  Timer? _connectionCheckTimer;
 
-  // ✅ ADD THIS PUBLIC GETTER
-  String? get currentUserId => _auth.currentUser?.uid;
-
-  // ✅ ADDED: Stream subscriptions for real-time updates
+  // Stream subscriptions
   StreamSubscription<DocumentSnapshot>? _followSubscription;
   StreamSubscription<QuerySnapshot>? _followerCountSubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
+  // ==================== GETTERS ====================
+  String? get currentUserId => _auth.currentUser?.uid;
+  bool get isOwner => currentUserId == userId;
+
+  // ==================== LIFECYCLE ====================
   VideoPlayerControllerX({
     required this.videoUrl,
     required this.videoTitle,
@@ -65,122 +87,272 @@ class VideoPlayerControllerX extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    print('🎬 Video URL: $videoUrl');
     _initializeAndPlay();
     _fetchData();
+    _setupConnectivityListener();
   }
 
+  @override
+  void onClose() {
+    _disposeResources();
+    super.onClose();
+  }
+
+  // ==================== INITIALIZATION ====================
   Future<void> _initializeAndPlay() async {
     try {
       isLoading.value = true;
       errorMessage.value = '';
+      _retryCount = 0;
 
       if (videoUrl.isEmpty) {
-        throw Exception(
-          'Video URL is empty. Please check your Firestore data.',
-        );
+        throw Exception('Video URL is empty');
       }
 
       print('🎬 Initializing video player...');
-      videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await videoController!.initialize();
 
-      print('✅ Video initialized successfully');
-      duration.value = videoController!.value.duration;
+      await _initializeVideoPlayer();
+      await _setupVideoListeners();
+
       isInitialized.value = true;
       isLoading.value = false;
 
-      videoController!.addListener(() {
-        if (!_isDisposed && videoController!.value.isInitialized) {
-          position.value = videoController!.value.position;
-          isPlaying.value = videoController!.value.isPlaying;
-        }
-        update();
-      });
-
-      await videoController!.play();
-      isPlaying.value = true;
-
+      await _startPlayback();
+      _startProgressUpdates();
       _setupViewTracking();
-
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!_isDisposed && isPlaying.value) showControls.value = false;
-      });
+      _startHideControlsTimer();
 
       update();
     } catch (e) {
-      print('❌ Video Player Error: $e');
-      isLoading.value = false;
-      errorMessage.value = _getErrorMessage(e.toString());
+      _handleInitializationError(e);
     }
   }
 
-  void _setupViewTracking() {
+  Future<void> _initializeVideoPlayer() async {
+    // Dispose existing controller
+    if (videoController != null) {
+      await videoController!.dispose();
+    }
+
+    print('🎬 Initializing video with URL: $videoUrl');
+
+    // ✅ CLEAN: No custom headers, no URL manipulation
+    videoController = VideoPlayerController.networkUrl(
+      Uri.parse(videoUrl),
+      videoPlayerOptions: VideoPlayerOptions(
+        mixWithOthers: true,
+        allowBackgroundPlayback: false,
+      ),
+    );
+
+    // ✅ Increased timeout to 90 seconds for HLS
+    await videoController!.initialize().timeout(
+      const Duration(seconds: 90),
+      onTimeout: () => throw TimeoutException('Video initialization timed out'),
+    );
+
+    // Set initial state
+    duration.value = videoController!.value.duration;
+    videoController!.setVolume(isMuted.value ? 0 : volume.value);
+    videoController!.setLooping(true);
+
+    print('✅ Video initialized: ${duration.value}');
+  }
+
+  Future<void> _setupVideoListeners() async {
     if (videoController == null) return;
 
+    // Add listener for state changes
     videoController!.addListener(() {
-      if (!_isDisposed &&
-          !hasViewed.value &&
-          videoController!.value.isInitialized) {
-        final videoDuration = duration.value;
-        final currentPosition = position.value;
+      if (!_isDisposed && videoController!.value.isInitialized) {
+        _updatePlayState();
+        _updateBufferingState();
+      }
+      update();
+    });
 
-        if (currentPosition.inSeconds >= 30 ||
-            (videoDuration.inSeconds > 0 &&
-                currentPosition.inSeconds >= videoDuration.inSeconds ~/ 2)) {
-          _incrementUniqueViewCount();
+    // Pre-buffer for smoother playback
+    if (!videoController!.value.isInitialized) {
+      await videoController!.initialize();
+    }
+  }
+
+  void _updatePlayState() {
+    if (videoController != null && videoController!.value.isInitialized) {
+      isPlaying.value = videoController!.value.isPlaying;
+    }
+  }
+
+  void _updateBufferingState() {
+    if (videoController != null && videoController!.value.isInitialized) {
+      final isBufferingNow = videoController!.value.isBuffering;
+      if (isBufferingNow != isBuffering.value) {
+        isBuffering.value = isBufferingNow;
+        if (isBufferingNow) {
+          _showBufferingIndicator();
         }
+      }
+    }
+  }
+
+  Future<void> _startPlayback() async {
+    // Small delay for smoother start
+    await Future.delayed(const Duration(milliseconds: 100));
+    await videoController!.play();
+    isPlaying.value = true;
+  }
+
+  // ==================== PROGRESS UPDATES ====================
+  void _startProgressUpdates() {
+    _progressTimer?.cancel();
+    // ✅ Use 500ms interval (reduced CPU usage)
+    _progressTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _updateProgress(),
+    );
+  }
+
+  void _updateProgress() {
+    if (_isDisposed ||
+        videoController == null ||
+        !videoController!.value.isInitialized) {
+      return;
+    }
+
+    position.value = videoController!.value.position;
+    duration.value = videoController!.value.duration;
+
+    // Update buffered position
+    final buffered = videoController!.value.buffered;
+    if (buffered.isNotEmpty) {
+      bufferedPosition.value = buffered.last.end;
+    }
+  }
+
+  // ==================== BUFFERING HANDLING ====================
+  void _showBufferingIndicator() {
+    if (_isDisposed) return;
+
+    // Show buffering indicator after short delay
+    _bufferingTimer?.cancel();
+    _bufferingTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!_isDisposed && isBuffering.value) {
+        // Show buffering UI through UI state
       }
     });
   }
 
+  // ==================== VIEW TRACKING ====================
+  void _setupViewTracking() {
+    if (videoController == null) return;
+
+    videoController!.addListener(() {
+      if (_shouldTrackView()) {
+        _incrementUniqueViewCount();
+      }
+    });
+  }
+
+  bool _shouldTrackView() {
+    return !_isDisposed &&
+        !hasViewed.value &&
+        !_isUpdatingView &&
+        videoController != null &&
+        videoController!.value.isInitialized &&
+        _hasReachedViewThreshold();
+  }
+
+  bool _hasReachedViewThreshold() {
+    final currentPosition = position.value.inSeconds;
+    final videoDuration = duration.value.inSeconds;
+
+    // Track at 30 seconds or halfway
+    return currentPosition >= VideoPlayerConstants.viewThresholdSeconds ||
+        (videoDuration > 0 &&
+            currentPosition >=
+                (videoDuration * VideoPlayerConstants.viewThresholdPercentage)
+                    .floor());
+  }
+
   Future<void> _incrementUniqueViewCount() async {
-    if (hasViewed.value || _isDisposed) return;
+    if (_isDisposed || hasViewed.value || _isUpdatingView) return;
 
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      _isUpdatingView = false;
+      return;
+    }
+
+    _isUpdatingView = true;
 
     try {
-      final viewRef = _firestore
-          .collection('recipe_videos')
-          .doc(videoId)
-          .collection('views')
-          .doc(user.uid);
+      final videoRef = _firestore.collection('recipe_videos').doc(videoId);
 
+      // Check if already viewed
+      final viewRef = videoRef.collection('views').doc(user.uid);
       final viewDoc = await viewRef.get();
 
       if (!viewDoc.exists) {
         await viewRef.set({
           'userId': user.uid,
+          'userName': user.displayName ?? 'User',
+          'userImage': user.photoURL ?? '',
           'viewedAt': FieldValue.serverTimestamp(),
-          'userEmail': user.email,
+          'watchDuration': position.value.inSeconds,
         });
 
-        await _firestore.collection('recipe_videos').doc(videoId).update({
-          'views': FieldValue.increment(1),
-        });
+        await videoRef.update({'views': FieldValue.increment(1)});
 
         hasViewed.value = true;
         viewsCount.value++;
+        print('👁️ View tracked for video: $videoId');
+      } else {
+        hasViewed.value = true;
+        // Update watch duration
+        await viewRef.update({
+          'watchDuration': FieldValue.increment(position.value.inSeconds),
+          'lastViewedAt': FieldValue.serverTimestamp(),
+        });
       }
     } catch (e) {
-      print('Error incrementing unique view: $e');
+      print('❌ View Error: $e');
+    }
+
+    _isUpdatingView = false;
+  }
+
+  // ==================== CONNECTIVITY ====================
+  void _setupConnectivityListener() {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
+      final hasConnection = results.any(
+        (result) => result != ConnectivityResult.none,
+      );
+      if (hasConnection && errorMessage.value.isNotEmpty) {
+        _handleReconnection();
+      }
+    });
+  }
+
+  void _handleReconnection() {
+    print('🌐 Reconnected, attempting to resume...');
+    if (videoController != null && !videoController!.value.isInitialized) {
+      _retryCount = 0;
+      _initializeAndPlay();
     }
   }
 
-  String _getErrorMessage(String error) {
-    if (error.contains('404')) return 'Video not found.';
-    if (error.contains('403')) return 'Access denied. Please login.';
-    if (error.contains('Network')) return 'Network error. Check connection.';
-    return 'Failed to load video. Please try again.';
-  }
-
-  // ✅ UPDATED: _fetchData with realtime listeners
+  // ==================== DATA FETCHING ====================
   Future<void> _fetchData() async {
-    await Future.wait([fetchVideoStats(), checkIfLiked()]);
-
-    // Start realtime listeners
-    checkIfFollowing();
-    listenFollowerCount();
+    try {
+      await Future.wait([fetchVideoStats(), checkIfLiked(), _fetchUserData()]);
+      checkIfFollowing();
+      listenFollowerCount();
+    } catch (e) {
+      print('❌ Error fetching data: $e');
+    }
   }
 
   Future<void> fetchVideoStats() async {
@@ -194,13 +366,14 @@ class VideoPlayerControllerX extends GetxController {
         viewsCount.value = data['views'] ?? 0;
       }
     } catch (e) {
-      print('Error fetching stats: $e');
+      print('❌ Error fetching stats: $e');
     }
   }
 
   Future<void> checkIfLiked() async {
     final user = _auth.currentUser;
     if (user == null) return;
+
     try {
       final likeDoc =
           await _firestore
@@ -211,11 +384,26 @@ class VideoPlayerControllerX extends GetxController {
               .get();
       isLiked.value = likeDoc.exists;
     } catch (e) {
-      print('Error checking like status: $e');
+      print('❌ Error checking like: $e');
     }
   }
 
-  // ✅ REPLACED: Real-time follow status listener
+  Future<void> _fetchUserData() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      // Fetch user data for caching
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      if (userDoc.exists) {
+        // Cache user data if needed
+      }
+    } catch (e) {
+      print('❌ Error fetching user data: $e');
+    }
+  }
+
+  // ==================== FOLLOW SYSTEM ====================
   void checkIfFollowing() {
     final user = _auth.currentUser;
 
@@ -224,10 +412,8 @@ class VideoPlayerControllerX extends GetxController {
       return;
     }
 
-    // Cancel existing subscription
     _followSubscription?.cancel();
 
-    // Start realtime listener
     _followSubscription = _firestore
         .collection('users')
         .doc(userId)
@@ -238,17 +424,15 @@ class VideoPlayerControllerX extends GetxController {
           (doc) {
             if (!_isDisposed) {
               isFollowing.value = doc.exists;
-              print('📡 Real-time follow status updated: ${doc.exists}');
             }
           },
           onError: (error) {
-            print('❌ Follow status listener error: $error');
+            print('❌ Follow listener error: $error');
             isFollowing.value = false;
           },
         );
   }
 
-  // ✅ ADDED: Real-time follower count listener
   void listenFollowerCount() {
     _followerCountSubscription?.cancel();
 
@@ -257,41 +441,31 @@ class VideoPlayerControllerX extends GetxController {
         .doc(userId)
         .collection('followers')
         .snapshots()
-        .listen((QuerySnapshot snapshot) {
-          followerCount.value = snapshot.size;
-          print('Followers count: ${snapshot.size}');
-        });
+        .listen(
+          (snapshot) {
+            if (!_isDisposed) {
+              followerCount.value = snapshot.size;
+            }
+          },
+          onError: (error) {
+            print('❌ Follower count error: $error');
+            followerCount.value = 0;
+          },
+        );
   }
 
-  // ✅ SIMPLIFIED: toggleFollow without manual UI updates
   Future<void> toggleFollow() async {
     if (isFollowingLoading.value) return;
-
-    print("Target User UID: $userId");
 
     final user = _auth.currentUser;
 
     if (user == null) {
-      Get.snackbar(
-        'Login Required',
-        'Please login first',
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      _showSnackbar('Login Required', 'Please login first', Colors.orange);
       return;
     }
 
-    print("Current User UID: ${user.uid}");
-
     if (user.uid == userId) {
-      Get.snackbar(
-        'Info',
-        'You cannot follow yourself',
-        backgroundColor: Colors.blue,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      _showSnackbar('Info', 'You cannot follow yourself', Colors.blue);
       return;
     }
 
@@ -306,31 +480,26 @@ class VideoPlayerControllerX extends GetxController {
       final followerDoc = await followerRef.get();
 
       if (followerDoc.exists) {
-        // UNFOLLOW
+        // Unfollow
         await followerRef.delete();
         await followingRef.delete();
 
-        // ❌ REMOVED manual UI updates - realtime listener will handle
-        // isFollowing.value = false;
-        // followerCount.value--;
-
-        Get.snackbar(
+        _showSnackbar(
           'Unfollowed',
           'You unfollowed $channelName',
-          backgroundColor: Colors.grey,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-          duration: const Duration(seconds: 1),
+          Colors.grey,
+          duration: 1,
         );
       } else {
-        // FOLLOW
-        await followerRef.set({
+        // Follow
+        final userData = {
           'followerId': user.uid,
           'userName': user.displayName ?? 'User',
           'userImage': user.photoURL ?? '',
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        };
 
+        await followerRef.set(userData);
         await followingRef.set({
           'followingId': userId,
           'followingName': channelName,
@@ -338,104 +507,148 @@ class VideoPlayerControllerX extends GetxController {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        await targetUserRef.update({'followerCount': FieldValue.increment(1)});
+        // Send notification
+        await _sendFollowNotification(user);
 
-        // ❌ REMOVED manual UI updates - realtime listener will handle
-        // isFollowing.value = true;
-        // followerCount.value++;
-
-        Get.snackbar(
+        _showSnackbar(
           'Following',
           'You are now following $channelName',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-          duration: const Duration(seconds: 1),
+          Colors.green,
+          duration: 1,
         );
       }
     } catch (e) {
-      print('FOLLOW ERROR: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to follow/unfollow',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      print('❌ Follow error: $e');
+      _showSnackbar('Error', 'Failed to follow/unfollow', Colors.red);
     } finally {
       isFollowingLoading.value = false;
     }
   }
 
+  Future<void> _sendFollowNotification(User user) async {
+    try {
+      await _firestore.collection('notifications').add({
+        'type': 'follow',
+        'userId': userId,
+        'actorId': user.uid,
+        'actorName': user.displayName ?? 'User',
+        'actorImage': user.photoURL ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+    } catch (e) {
+      print('❌ Notification error: $e');
+    }
+  }
+
+  // ==================== VIDEO CONTROLS ====================
   void playPause() {
     if (!isInitialized.value || videoController == null || _isDisposed) return;
+
     if (videoController!.value.isPlaying) {
       videoController!.pause();
       isPlaying.value = false;
       showControls.value = true;
+      _hideControlsTimer?.cancel();
     } else {
       videoController!.play();
       isPlaying.value = true;
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!_isDisposed && isPlaying.value) showControls.value = false;
-      });
+      _startHideControlsTimer();
     }
     update();
   }
 
   void forward10Seconds() {
     if (!isInitialized.value || videoController == null || _isDisposed) return;
+
     final newPosition = position.value + const Duration(seconds: 10);
     if (newPosition < duration.value) {
-      videoController!.seekTo(newPosition);
-      position.value = newPosition;
+      _seekTo(newPosition);
     } else {
-      videoController!.seekTo(duration.value);
-      position.value = duration.value;
+      _seekTo(duration.value);
     }
     _showControlOverlay();
   }
 
   void rewind10Seconds() {
     if (!isInitialized.value || videoController == null || _isDisposed) return;
+
     final newPosition = position.value - const Duration(seconds: 10);
     if (newPosition > Duration.zero) {
-      videoController!.seekTo(newPosition);
-      position.value = newPosition;
+      _seekTo(newPosition);
     } else {
-      videoController!.seekTo(Duration.zero);
-      position.value = Duration.zero;
+      _seekTo(Duration.zero);
     }
     _showControlOverlay();
   }
 
+  void _seekTo(Duration position) {
+    if (videoController == null || _isDisposed) return;
+    videoController!.seekTo(position);
+    this.position.value = position;
+  }
+
+  void toggleMute() {
+    if (videoController == null || _isDisposed) return;
+
+    isMuted.value = !isMuted.value;
+    videoController!.setVolume(isMuted.value ? 0 : volume.value);
+  }
+
+  void setVolume(double value) {
+    if (videoController == null || _isDisposed) return;
+
+    volume.value = value.clamp(0.0, 1.0);
+    if (!isMuted.value) {
+      videoController!.setVolume(volume.value);
+    }
+  }
+
   void _showControlOverlay() {
     if (_isDisposed) return;
+
     showControls.value = true;
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!_isDisposed && isPlaying.value) showControls.value = false;
-    });
+    _hideControlsTimer?.cancel();
+
+    if (isPlaying.value) {
+      _startHideControlsTimer();
+    }
   }
 
   void toggleControls() {
     if (_isDisposed) return;
+
     showControls.value = !showControls.value;
-    if (showControls.value && isPlaying.value) {
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!_isDisposed && isPlaying.value) showControls.value = false;
-      });
+
+    if (showControls.value) {
+      _hideControlsTimer?.cancel();
+      if (isPlaying.value) {
+        _startHideControlsTimer();
+      }
     }
   }
 
+  void _startHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(
+      Duration(seconds: VideoPlayerConstants.controlsHideDelaySeconds),
+      () {
+        if (!_isDisposed && isPlaying.value) {
+          showControls.value = false;
+        }
+      },
+    );
+  }
+
+  // ==================== LIKE SYSTEM ====================
   Future<void> toggleLike() async {
     final user = _auth.currentUser;
+
     if (user == null) {
-      Get.snackbar(
+      _showSnackbar(
         'Login Required',
         'Please login to like videos',
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
+        Colors.orange,
       );
       return;
     }
@@ -446,44 +659,82 @@ class VideoPlayerControllerX extends GetxController {
       final likeDoc = await likeRef.get();
 
       if (likeDoc.exists) {
+        // Unlike
         await likeRef.delete();
         await videoRef.update({'likes': FieldValue.increment(-1)});
+
         isLiked.value = false;
         likeCount.value--;
       } else {
+        // Like
         await likeRef.set({
           'userId': user.uid,
           'userEmail': user.email,
           'userName': user.displayName,
+          'userImage': user.photoURL ?? '',
           'createdAt': FieldValue.serverTimestamp(),
         });
+
         await videoRef.update({'likes': FieldValue.increment(1)});
+
         isLiked.value = true;
         likeCount.value++;
+
+        // Send like notification
+        if (!isOwner) {
+          await _sendLikeNotification(user);
+        }
       }
     } catch (e) {
-      print('Error toggling like: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to like video',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      print('❌ Like error: $e');
+      _showSnackbar('Error', 'Failed to like video', Colors.red);
     }
   }
 
+  Future<void> _sendLikeNotification(User user) async {
+    try {
+      await _firestore.collection('notifications').add({
+        'type': 'like',
+        'videoId': videoId,
+        'videoTitle': videoTitle,
+        'userId': userId,
+        'actorId': user.uid,
+        'actorName': user.displayName ?? 'User',
+        'actorImage': user.photoURL ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+    } catch (e) {
+      print('❌ Like notification error: $e');
+    }
+  }
+
+  // ==================== SHARE SYSTEM ====================
   Future<void> shareVideo() async {
     try {
-      String durationText = '';
-      if (duration.value.inHours > 0) {
-        durationText =
-            '${duration.value.inHours}h ${duration.value.inMinutes.remainder(60)}m';
-      } else {
-        durationText = '${duration.value.inMinutes} min';
-      }
+      final shareText = _buildShareText();
+      await Share.share(shareText, subject: videoTitle);
 
-      final shareText = '''
+      // Increment share count
+      await _firestore.collection('recipe_videos').doc(videoId).update({
+        'shares': FieldValue.increment(1),
+      });
+
+      _showSnackbar(
+        'Success',
+        'Shared successfully!',
+        Colors.green,
+        duration: 1,
+      );
+    } catch (e) {
+      print('❌ Share error: $e');
+      _showSnackbar('Error', 'Could not share video', Colors.red);
+    }
+  }
+
+  String _buildShareText() {
+    final durationText = _formatDurationForShare();
+    return '''
 🍲 Check out this recipe video!
 
 📹 $videoTitle
@@ -494,123 +745,52 @@ class VideoPlayerControllerX extends GetxController {
 
 Watch now in Racha Ruchi App!
 ''';
-
-      await Share.share(shareText, subject: videoTitle);
-
-      await _firestore.collection('recipe_videos').doc(videoId).update({
-        'shares': FieldValue.increment(1),
-      });
-
-      Get.snackbar(
-        'Success',
-        'Shared successfully!',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 1),
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      print('Error sharing: $e');
-      Get.snackbar(
-        'Error',
-        'Could not share video',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
   }
 
+  String _formatDurationForShare() {
+    if (duration.value.inHours > 0) {
+      return '${duration.value.inHours}h ${duration.value.inMinutes.remainder(60)}m';
+    }
+    return '${duration.value.inMinutes} min';
+  }
+
+  // ==================== REPORT SYSTEM ====================
   Future<bool> reportVideo({required String reason}) async {
     try {
       final user = _auth.currentUser;
 
       if (user == null) {
-        Get.snackbar(
-          'Login Required',
-          'Please login first',
-          backgroundColor: Colors.orange,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-        );
+        _showSnackbar('Login Required', 'Please login first', Colors.orange);
         return false;
       }
 
       await _firestore.collection('reports').add({
         'videoId': videoId,
         'videoTitle': videoTitle,
+        'videoOwnerId': userId,
         'reason': reason,
         'reportedBy': user.uid,
         'reportedByEmail': user.email,
+        'reportedByName': user.displayName,
         'reportedAt': FieldValue.serverTimestamp(),
         'status': 'pending',
+        'reviewed': false,
       });
 
+      _showSnackbar(
+        'Reported',
+        'Thanks for your feedback. We will review it.',
+        Colors.green,
+      );
       return true;
     } catch (e) {
-      print('❌ Report Error: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to report video',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      print('❌ Report error: $e');
+      _showSnackbar('Error', 'Failed to report video', Colors.red);
       return false;
     }
   }
 
-  Widget _reportOption({required String title, required String reason}) {
-    return ListTile(
-      leading: const Icon(Iconsax.warning_2, color: Colors.red),
-      title: Text(title),
-      onTap: () async {
-        Get.back();
-        final success = await reportVideo(reason: reason);
-        if (success) {
-          Get.snackbar(
-            'Reported',
-            'Thanks for your feedback. We will review it.',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-            snackPosition: SnackPosition.BOTTOM,
-            duration: const Duration(seconds: 2),
-          );
-        }
-      },
-    );
-  }
-
-  void reportVideoBottomSheet() {
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Report Video',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            _reportOption(title: 'Spam or misleading', reason: 'spam'),
-            _reportOption(title: 'Violent content', reason: 'violence'),
-            _reportOption(title: 'Hateful content', reason: 'hate'),
-            _reportOption(title: 'Sexual content', reason: 'sexual'),
-            _reportOption(title: 'Copyright issue', reason: 'copyright'),
-            _reportOption(title: 'Other', reason: 'other'),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-      backgroundColor: Colors.transparent,
-    );
-  }
-
+  // ==================== COMMENTS ====================
   void openComments() {
     showModalBottomSheet(
       context: Get.context!,
@@ -643,43 +823,153 @@ Watch now in Racha Ruchi App!
     );
   }
 
+  // ==================== REPORT BOTTOM SHEET ====================
+  void reportVideoBottomSheet() {
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Report Video',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ..._buildReportOptions(),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+      backgroundColor: Colors.transparent,
+    );
+  }
+
+  List<Widget> _buildReportOptions() {
+    final reports = [
+      ('Spam or misleading', 'spam'),
+      ('Violent content', 'violence'),
+      ('Hateful content', 'hate'),
+      ('Sexual content', 'sexual'),
+      ('Copyright issue', 'copyright'),
+      ('Other', 'other'),
+    ];
+
+    return reports.map((report) {
+      return ListTile(
+        leading: const Icon(Iconsax.warning_2, color: Colors.red),
+        title: Text(report.$1),
+        onTap: () async {
+          Get.back();
+          await reportVideo(reason: report.$2);
+        },
+      );
+    }).toList();
+  }
+
+  // ==================== ERROR HANDLING ====================
+  void _handleInitializationError(dynamic error) {
+    print('❌ Video Player Error: $error');
+
+    if (_retryCount < VideoPlayerConstants.maxRetryAttempts) {
+      _retryCount++;
+      print(
+        '🔄 Retry attempt $_retryCount/${VideoPlayerConstants.maxRetryAttempts}',
+      );
+
+      Future.delayed(VideoPlayerConstants.retryDelay, () {
+        if (!_isDisposed) {
+          _initializeAndPlay();
+        }
+      });
+      return;
+    }
+
+    isLoading.value = false;
+    errorMessage.value = _getErrorMessage(error.toString());
+  }
+
+  String _getErrorMessage(String error) {
+    if (error.contains('404')) return 'Video not found or has been removed.';
+    if (error.contains('403')) return 'Access denied. Please try again.';
+    if (error.contains('Network') || error.contains('Connection')) {
+      return 'Network error. Please check your connection.';
+    }
+    if (error.contains('HLS')) return 'This video format is not supported.';
+    if (error.contains('Timeout')) {
+      return 'Loading timed out. Please try again.';
+    }
+    if (error.contains('Source error')) {
+      return 'Video format not supported or video is still processing. Please wait and try again.';
+    }
+    return 'Failed to load video. Please try again.';
+  }
+
   void retry() {
+    _retryCount = 0;
     _initializeAndPlay();
   }
 
+  // ==================== UTILITIES ====================
   String formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    if (duration.inHours > 0) {
-      final hours = twoDigits(duration.inHours);
-      return '$hours:$minutes:$seconds';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
-    return '$minutes:$seconds';
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  // ✅ UPDATED: Dispose all subscriptions
-  @override
-  void onClose() {
+  void _showSnackbar(
+    String title,
+    String message,
+    Color color, {
+    int duration = 2,
+  }) {
+    if (_isDisposed) return;
+
+    Get.snackbar(
+      title,
+      message,
+      backgroundColor: color,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: Duration(seconds: duration),
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
+    );
+  }
+
+  // ==================== DISPOSAL ====================
+  void _disposeResources() {
+    if (_isDisposed) return;
+
     _isDisposed = true;
 
-    // Cancel stream subscriptions
+    // Cancel all timers
+    _progressTimer?.cancel();
+    _hideControlsTimer?.cancel();
+    _bufferingTimer?.cancel();
+    _connectionCheckTimer?.cancel();
+
+    // Cancel subscriptions
     _followSubscription?.cancel();
     _followerCountSubscription?.cancel();
+    _connectivitySubscription?.cancel();
 
     // Dispose video controller
     if (videoController != null) {
+      videoController!.removeListener(() {});
       videoController!.dispose();
+      videoController = null;
     }
 
-    super.onClose();
-  }
-}
-
-extension NumberFormatting on int {
-  String formatNumber() {
-    if (this >= 1000000) return '${(this / 1000000).toStringAsFixed(1)}M';
-    if (this >= 1000) return '${(this / 1000).toStringAsFixed(1)}K';
-    return toString();
+    print('🗑️ VideoPlayerController disposed');
   }
 }

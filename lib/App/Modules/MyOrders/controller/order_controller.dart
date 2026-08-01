@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 
 class OrderController extends GetxController {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   var isLoading = false.obs;
   var orders = <Map<String, dynamic>>[].obs;
   var filteredOrders = <Map<String, dynamic>>[].obs;
@@ -19,124 +23,141 @@ class OrderController extends GetxController {
     fetchOrders();
   }
 
-  void fetchOrders() async {
+  Future<void> fetchOrders() async {
     try {
       isLoading.value = true;
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+      final user = _auth.currentUser;
 
-      // Sample data - Replace with your actual API call
-      allOrders.value = [
-        {
-          'orderId': 'ORD001',
-          'date': '15 Jan 2024',
-          'status': 'Delivered',
-          'totalAmount': '450',
-          'paymentMethod': 'Credit Card',
-          'deliveryAddress': '123 Main St, New York, NY 10001',
-          'items': [
-            {
-              'name': 'Butter Chicken',
-              'quantity': 2,
-              'price': 250,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-            {
-              'name': 'Garlic Naan',
-              'quantity': 4,
-              'price': 40,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-            {
-              'name': 'Veg Biryani',
-              'quantity': 1,
-              'price': 180,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-          ],
-        },
-        {
-          'orderId': 'ORD002',
-          'date': '10 Jan 2024',
-          'status': 'Processing',
-          'totalAmount': '320',
-          'paymentMethod': 'Google Pay',
-          'deliveryAddress': '456 Oak Ave, Los Angeles, CA 90001',
-          'items': [
-            {
-              'name': 'Paneer Tikka',
-              'quantity': 1,
-              'price': 220,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-            {
-              'name': 'Masala Chai',
-              'quantity': 2,
-              'price': 50,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-          ],
-        },
-        {
-          'orderId': 'ORD003',
-          'date': '05 Jan 2024',
-          'status': 'Pending',
-          'totalAmount': '890',
-          'paymentMethod': 'Cash on Delivery',
-          'deliveryAddress': '789 Pine Rd, Chicago, IL 60601',
-          'items': [
-            {
-              'name': 'Chicken Biryani',
-              'quantity': 2,
-              'price': 320,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-            {
-              'name': 'Raita',
-              'quantity': 2,
-              'price': 50,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-            {
-              'name': 'Gulab Jamun',
-              'quantity': 3,
-              'price': 50,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-          ],
-        },
-        {
-          'orderId': 'ORD004',
-          'date': '20 Dec 2023',
-          'status': 'Cancelled',
-          'totalAmount': '150',
-          'paymentMethod': 'Credit Card',
-          'deliveryAddress': '321 Elm St, Houston, TX 77001',
-          'items': [
-            {
-              'name': 'French Fries',
-              'quantity': 1,
-              'price': 150,
-              'imageUrl': 'https://via.placeholder.com/50',
-            },
-          ],
-        },
-      ];
+      if (user == null) {
+        isLoading.value = false;
+        return;
+      }
 
-      orders.value = List.from(allOrders.value);
+      print("Current UID : ${user.uid}");
+
+      final snapshot =
+          await _firestore
+              .collection('orders')
+              .where('userId', isEqualTo: user.uid)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      print("Orders Found : ${snapshot.docs.length}");
+
+      allOrders.clear();
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+
+        final address = data['shippingAddress'] as Map<String, dynamic>? ?? {};
+
+        allOrders.add({
+          'orderId': doc.id,
+          'date': _formatDate(data['createdAt']),
+          'status': _formatStatus(data['status']),
+          'totalAmount': (data['total'] ?? 0).toDouble(),
+          'paymentMethod': _formatPaymentMethod(data['paymentMethod']),
+          'deliveryAddress':
+              "${address['addressLine1'] ?? ''}, "
+              "${address['addressLine2'] ?? ''}, "
+              "${address['city'] ?? ''}, "
+              "${address['state'] ?? ''}",
+          'items': List<Map<String, dynamic>>.from(data['items'] ?? []),
+        });
+      }
+
+      orders.assignAll(allOrders);
+
+      print(orders);
+
       isLoading.value = false;
-    } catch (e) {
+    } catch (e, s) {
+      print(e);
+      print(s);
+
       isLoading.value = false;
+
       Get.snackbar(
-        'Error',
-        'Failed to load orders: $e',
+        "Error",
+        e.toString(),
         backgroundColor: Colors.red,
         colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 3),
       );
     }
+  }
+
+  String _formatStatus(String? status) {
+    switch (status) {
+      case 'OrderStatus.pending':
+        return 'Pending';
+
+      case 'OrderStatus.processing':
+        return 'Processing';
+
+      case 'OrderStatus.confirmed':
+        return 'Confirmed';
+
+      case 'OrderStatus.shipped':
+        return 'Shipped';
+
+      case 'OrderStatus.delivered':
+        return 'Delivered';
+
+      case 'OrderStatus.cancelled':
+        return 'Cancelled';
+
+      default:
+        return 'Pending';
+    }
+  }
+
+  String _formatPaymentMethod(String? method) {
+    switch (method) {
+      case 'PaymentMethod.cod':
+        return 'Cash on Delivery';
+
+      case 'PaymentMethod.online':
+        return 'Online Payment';
+
+      default:
+        return method ?? '';
+    }
+  }
+
+  String _formatDate(dynamic value) {
+    if (value == null) return '';
+
+    DateTime date;
+
+    if (value is Timestamp) {
+      date = value.toDate();
+    } else {
+      date = DateTime.parse(value.toString());
+    }
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return "${date.day} ${months[date.month - 1]} ${date.year}";
+  }
+
+  String _capitalize(String value) {
+    if (value.isEmpty) return value;
+
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
   }
 
   void changeTab(int index) {
@@ -181,42 +202,81 @@ class OrderController extends GetxController {
     }
   }
 
-  void cancelOrder(String orderId) {
-    Get.defaultDialog(
-      title: 'Cancel Order',
-      middleText: 'Are you sure you want to cancel this order?',
-      textConfirm: 'Yes',
-      textCancel: 'No',
-      confirmTextColor: Colors.white,
-      buttonColor: Colors.red,
-      onConfirm: () {
-        // Implement cancel API call
-        Get.back();
-
-        // Update the order status locally
-        final index = orders.indexWhere((order) => order['orderId'] == orderId);
-        if (index != -1) {
-          orders[index]['status'] = 'Cancelled';
-          orders.refresh();
-        }
-
-        // Also update in allOrders
-        final allIndex = allOrders.indexWhere(
-          (order) => order['orderId'] == orderId,
-        );
-        if (allIndex != -1) {
-          allOrders[allIndex]['status'] = 'Cancelled';
-        }
-
-        Get.snackbar(
-          'Order Cancelled',
-          'Order #$orderId has been cancelled successfully',
-          backgroundColor: Colors.orange,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      },
+  Future<void> cancelOrder(String orderId) async {
+    final confirm = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text("Cancel Order"),
+        content: const Text("Are you sure you want to cancel this order?"),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text("No"),
+          ),
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
     );
+
+    if (confirm != true) return;
+
+    try {
+      Get.dialog(
+        const Center(child: CircularProgressIndicator()),
+        barrierDismissible: false,
+      );
+
+      final doc = await _firestore.collection('orders').doc(orderId).get();
+
+      if (!doc.exists) {
+        throw Exception("Order not found");
+      }
+
+      if (doc['status'] != 'OrderStatus.pending') {
+        throw Exception("Only pending orders can be cancelled.");
+      }
+
+      await doc.reference.update({
+        'status': 'OrderStatus.cancelled',
+        'cancelledBy': 'user',
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      Get.back(); // loading
+
+      final index = allOrders.indexWhere((e) => e['orderId'] == orderId);
+
+      if (index != -1) {
+        allOrders[index]['status'] = 'Cancelled';
+        allOrders.refresh();
+      }
+
+      changeTab(selectedTabIndex.value);
+
+      Get.snackbar(
+        "Success",
+        "Order cancelled successfully.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) {
+        Get.back();
+      }
+
+      Get.snackbar(
+        "Error",
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   void viewOrderDetails(Map<String, dynamic> order) {

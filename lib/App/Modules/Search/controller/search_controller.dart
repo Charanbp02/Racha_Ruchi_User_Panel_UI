@@ -17,23 +17,9 @@ class SearchBarController extends GetxController {
   Timer? _debounce;
   Timer? _suggestionDebounce;
 
-  @override
-  void onInit() {
-    super.onInit();
-    loadRecentSearches();
-  }
-
   // =========================
   // RECENT SEARCHES
   // =========================
-
-  void loadRecentSearches() {
-    recentSearches.value = [
-      'Chicken Biryani',
-      'Paneer Butter Masala',
-      'Masala Dosa',
-    ];
-  }
 
   void addToRecentSearch(String search) {
     recentSearches.remove(search);

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class AuthMiddleware extends GetMiddleware {
+class AuthMiddleware {
   @override
   RouteSettings? redirect(String? route) {
     final FirebaseAuth auth = FirebaseAuth.instance;

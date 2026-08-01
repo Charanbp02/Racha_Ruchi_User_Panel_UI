@@ -10,8 +10,7 @@ class AIChatView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use Get.find instead of GetBuilder with init
-    // Make sure binding is initialized first
+    // Ensure controller is registered
     if (!Get.isRegistered<AIChatController>()) {
       AIChatBinding().dependencies();
     }
@@ -24,31 +23,40 @@ class AIChatView extends StatelessWidget {
       body: Obx(
         () => Column(
           children: [
-            // Chat Messages
+            // Chat Messages with smooth scrolling
             Expanded(
-              child: ListView.builder(
-                controller: controller.scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount:
-                    controller.messages.length +
-                    (controller.isTyping.value ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == controller.messages.length &&
-                      controller.isTyping.value) {
-                    return _buildTypingIndicator();
-                  }
-                  final message = controller.messages[index];
-                  return _buildMessageBubble(message, controller);
-                },
+              child: GestureDetector(
+                onTap: () => controller.focusNode.unfocus(),
+                child: ListView.builder(
+                  controller: controller.scrollController,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 20,
+                  ),
+                  itemCount:
+                      controller.messages.length +
+                      (controller.isTyping.value ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == controller.messages.length &&
+                        controller.isTyping.value) {
+                      return const _TypingIndicator();
+                    }
+                    final message = controller.messages[index];
+                    return _MessageBubble(
+                      message: message,
+                      onRetry: () => controller.retryMessage(message),
+                    );
+                  },
+                ),
               ),
             ),
 
             // Suggested Prompts (when few messages)
             if (controller.messages.length <= 2)
-              _buildSuggestedPrompts(controller),
+              _SuggestedPrompts(controller: controller),
 
             // Input Bar
-            _buildInputBar(controller),
+            _InputBar(controller: controller),
           ],
         ),
       ),
@@ -57,73 +65,170 @@ class AIChatView extends StatelessWidget {
 
   PreferredSizeWidget _buildAppBar(AIChatController controller) {
     return AppBar(
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Iconsax.microphone_2,
-              color: Color(0xFFE53935),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'AI Recipe Assistant',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D2D2D),
-                ),
-              ),
-              Text(
-                'Powered by Gemini AI',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ],
-          ),
-        ],
-      ),
-      backgroundColor: Colors.white,
       elevation: 0,
-      centerTitle: false,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
       leading: IconButton(
-        icon: const Icon(Iconsax.arrow_left, color: Color(0xFF2D2D2D)),
+        icon: const Icon(Iconsax.arrow_left, color: Colors.black87),
         onPressed: () => Get.back(),
       ),
+      title: const _AppBarTitle(),
       actions: [
         IconButton(
+          onPressed: () => _showClearChatDialog(controller),
           icon: const Icon(Iconsax.trash, color: Color(0xFFE53935)),
-          onPressed: () => controller.clearChat(),
+          tooltip: 'Clear chat history',
         ),
       ],
     );
   }
 
-  Widget _buildMessageBubble(
-    ChatMessageModel message,
-    AIChatController controller,
-  ) {
+  void _showClearChatDialog(AIChatController controller) {
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Iconsax.trash,
+                  color: Color(0xFFE53935),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Clear Chat History',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Are you sure you want to clear all chat messages? This action cannot be undone.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Get.back(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        controller.clearChat();
+                        Get.back();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE53935),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Clear'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// App Bar Title Component
+class _AppBarTitle extends StatelessWidget {
+  const _AppBarTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFE53935), Color(0xFFFF7043)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE53935).withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(Iconsax.magicpen, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 12),
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "RachaRuchi AI",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            Text(
+              "Your Smart Cooking Assistant",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// Message Bubble Component
+class _MessageBubble extends StatelessWidget {
+  final ChatMessageModel message;
+  final VoidCallback onRetry;
+
+  const _MessageBubble({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
     final isUser = message.isUser;
 
     return GestureDetector(
       onLongPress: () {
         if (message.status == MessageStatus.error) {
-          controller.retryMessage(message);
+          onRetry();
         }
       },
       child: Container(
         margin: EdgeInsets.only(
           left: isUser ? 60 : 0,
           right: isUser ? 0 : 60,
-          bottom: 12,
+          bottom: 16,
         ),
         child: Row(
           mainAxisAlignment:
@@ -131,25 +236,12 @@ class AIChatView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isUser) ...[
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE53935),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Iconsax.microphone_2,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
+              const _AssistantAvatar(),
               const SizedBox(width: 8),
             ],
             Flexible(
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
@@ -159,8 +251,8 @@ class AIChatView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.shade100,
-                      blurRadius: 4,
+                      color: Colors.grey.withValues(alpha: 0.08),
+                      blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -168,7 +260,7 @@ class AIChatView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    SelectableText(
                       message.message,
                       style: TextStyle(
                         color: isUser ? Colors.white : Colors.black87,
@@ -176,7 +268,7 @@ class AIChatView extends StatelessWidget {
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -192,7 +284,7 @@ class AIChatView extends StatelessWidget {
                         ),
                         if (isUser && message.status == MessageStatus.sending)
                           const Padding(
-                            padding: EdgeInsets.only(left: 4),
+                            padding: EdgeInsets.only(left: 8),
                             child: SizedBox(
                               width: 12,
                               height: 12,
@@ -203,204 +295,20 @@ class AIChatView extends StatelessWidget {
                             ),
                           ),
                         if (isUser && message.status == MessageStatus.error)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 4),
-                            child: Icon(
-                              Iconsax.warning_2,
-                              size: 12,
-                              color: Colors.white70,
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Tooltip(
+                              message: 'Tap and hold to retry',
+                              child: const Icon(
+                                Iconsax.warning_2,
+                                size: 12,
+                                color: Colors.white70,
+                              ),
                             ),
                           ),
                       ],
                     ),
                   ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTypingIndicator() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE53935),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Center(
-              child: Icon(Iconsax.microphone_2, color: Colors.white, size: 18),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _TypingDot(delay: Duration(milliseconds: 0)),
-                SizedBox(width: 4),
-                _TypingDot(delay: Duration(milliseconds: 200)),
-                SizedBox(width: 4),
-                _TypingDot(delay: Duration(milliseconds: 400)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestedPrompts(AIChatController controller) {
-    return Container(
-      height: 100,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: controller.suggestedPrompts.length,
-        itemBuilder: (context, index) {
-          final prompt = controller.suggestedPrompts[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => controller.useSuggestedPrompt(prompt),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: Colors.grey.shade200),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.shade50,
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Iconsax.messages_1,
-                        size: 16,
-                        color: Color(0xFFE53935),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        prompt,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF2D2D2D),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildInputBar(AIChatController controller) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade100,
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: TextField(
-                  controller: controller.messageController,
-                  focusNode: controller.focusNode,
-                  onSubmitted: (_) => controller.sendMessage(),
-                  decoration: InputDecoration(
-                    hintText: 'Ask about recipes...',
-                    hintStyle: const TextStyle(color: Colors.grey),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    suffixIcon: IconButton(
-                      icon: const Icon(
-                        Iconsax.attach_circle,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () {
-                        Get.snackbar(
-                          'Coming Soon',
-                          'Image attachment feature coming soon!',
-                          snackPosition: SnackPosition.BOTTOM,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Obx(
-              () => Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE53935),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFE53935).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon:
-                      controller.isLoading.value
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                          : const Icon(Iconsax.send_1, color: Colors.white),
-                  onPressed:
-                      controller.isLoading.value
-                          ? null
-                          : () => controller.sendMessage(),
                 ),
               ),
             ),
@@ -426,7 +334,75 @@ class AIChatView extends StatelessWidget {
   }
 }
 
-// Animated typing dot widget
+// Assistant Avatar Component
+class _AssistantAvatar extends StatelessWidget {
+  const _AssistantAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFE53935), Color(0xFFFF7043)],
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Center(
+        child: Icon(Iconsax.microphone_2, color: Colors.white, size: 18),
+      ),
+    );
+  }
+}
+
+// Typing Indicator Component
+class _TypingIndicator extends StatelessWidget {
+  const _TypingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: const Row(
+        children: [_AssistantAvatar(), SizedBox(width: 8), _TypingDots()],
+      ),
+    );
+  }
+}
+
+class _TypingDots extends StatelessWidget {
+  const _TypingDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _TypingDot(delay: Duration(milliseconds: 0)),
+          SizedBox(width: 6),
+          _TypingDot(delay: Duration(milliseconds: 200)),
+          SizedBox(width: 6),
+          _TypingDot(delay: Duration(milliseconds: 400)),
+        ],
+      ),
+    );
+  }
+}
+
 class _TypingDot extends StatefulWidget {
   final Duration delay;
 
@@ -450,7 +426,7 @@ class _TypingDotState extends State<_TypingDot>
     );
 
     _animation = Tween<double>(
-      begin: 0.3,
+      begin: 0.4,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
@@ -481,6 +457,188 @@ class _TypingDotState extends State<_TypingDot>
           ),
         );
       },
+    );
+  }
+}
+
+// Suggested Prompts Component
+class _SuggestedPrompts extends StatelessWidget {
+  final AIChatController controller;
+
+  const _SuggestedPrompts({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 110,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: controller.suggestedPrompts.length,
+        itemBuilder: (context, index) {
+          final prompt = controller.suggestedPrompts[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Material(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(25),
+              color: Colors.white,
+              child: InkWell(
+                onTap: () => controller.useSuggestedPrompt(prompt),
+                borderRadius: BorderRadius.circular(25),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Iconsax.messages_1,
+                        size: 16,
+                        color: Color(0xFFE53935),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        prompt,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF2D2D2D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Input Bar Component
+class _InputBar extends StatelessWidget {
+  final AIChatController controller;
+
+  const _InputBar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FA),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: TextField(
+                  controller: controller.messageController,
+                  focusNode: controller.focusNode,
+                  onSubmitted: (_) => controller.sendMessage(),
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  decoration: InputDecoration(
+                    hintText: 'Ask about recipes...',
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(
+                        Iconsax.attach_circle,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        Get.snackbar(
+                          'Coming Soon',
+                          'Image attachment feature coming soon!',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.white,
+                          colorText: Colors.black87,
+                          borderRadius: 12,
+                          margin: const EdgeInsets.all(16),
+                        );
+                      },
+                      tooltip: 'Attach image (coming soon)',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Obx(
+              () => AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE53935), Color(0xFFFF7043)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFE53935).withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap:
+                        controller.isLoading.value
+                            ? null
+                            : controller.sendMessage,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: Center(
+                        child:
+                            controller.isLoading.value
+                                ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Icon(
+                                  Iconsax.send_1,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

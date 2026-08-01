@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:racharuchi/App/Models/My_Recipe_Model/recipe_model.dart';
 import 'package:racharuchi/App/Modules/Upload/controller/upload_controller.dart';
+import 'package:share_plus/share_plus.dart';
 
 class MyRecipesController extends GetxController {
   var myRecipes = <RecipeModel>[].obs;
@@ -141,6 +144,185 @@ class MyRecipesController extends GetxController {
       print('❌ Error setting up listener: $e');
       isLoading.value = false;
       _showErrorSnackbar('Failed to load recipes');
+    }
+  }
+
+  Future<void> uploadThumbnail(String recipeId, XFile imageFile) async {
+    try {
+      // Show loading dialog
+      Get.dialog(
+        const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFE53935)),
+              SizedBox(height: 16),
+              Text(
+                'Uploading thumbnail...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+      );
+
+      // Compress and upload image to Firebase Storage
+      final File file = File(imageFile.path);
+
+      // Create a unique filename
+      final String fileName =
+          '$recipeId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      final Reference storageRef = FirebaseStorage.instance
+          .ref()
+          .child('recipe_thumbnails')
+          .child(fileName);
+
+      // Upload the file with metadata
+      final SettableMetadata metadata = SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {
+          'recipeId': recipeId,
+          'uploadedAt': DateTime.now().toIso8601String(),
+        },
+      );
+
+      await storageRef.putFile(file, metadata);
+
+      // Get the download URL
+      final String downloadUrl = await storageRef.getDownloadURL();
+
+      // Update Firestore document with new thumbnail URL
+      await _firestore.collection('recipe_videos').doc(recipeId).update({
+        'thumbnailUrl': downloadUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update the local recipe model
+      final int index = myRecipes.indexWhere((r) => r.id == recipeId);
+      if (index != -1) {
+        myRecipes[index] = myRecipes[index].copyWith(
+          imageUrl: downloadUrl,
+          updatedAt: DateTime.now(),
+        );
+        applyFilters();
+      }
+
+      Get.back(); // Close loading dialog
+
+      Get.snackbar(
+        'Success',
+        'Thumbnail uploaded successfully! ✅',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      );
+    } catch (e) {
+      Get.back(); // Close loading dialog if open
+
+      print('Error uploading thumbnail: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to upload thumbnail: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(16),
+      );
+    }
+  }
+
+  // lib/App/Modules/My_Recipes/controller/my_recipes_controller.dart
+
+  Future<void> removeThumbnail(String recipeId) async {
+    try {
+      // Show loading dialog
+      Get.dialog(
+        const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFE53935)),
+              SizedBox(height: 16),
+              Text(
+                'Removing thumbnail...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+      );
+
+      // Get current recipe to find the thumbnail URL
+      final DocumentSnapshot doc =
+          await _firestore.collection('recipe_videos').doc(recipeId).get();
+
+      // FIX: Properly access the thumbnailUrl field from the document data
+      final Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+      final String? currentThumbnailUrl = data?['thumbnailUrl'] as String?;
+
+      // If there's a thumbnail URL, try to delete it from storage
+      if (currentThumbnailUrl != null && currentThumbnailUrl.isNotEmpty) {
+        try {
+          // Extract the path from the URL
+          final Reference ref = FirebaseStorage.instance.refFromURL(
+            currentThumbnailUrl,
+          );
+          await ref.delete();
+          print('✅ Thumbnail deleted from storage');
+        } catch (e) {
+          // File might not exist or already deleted
+          print('Error deleting thumbnail from storage: $e');
+        }
+      }
+
+      // Update Firestore document with empty thumbnail
+      await _firestore.collection('recipe_videos').doc(recipeId).update({
+        'thumbnailUrl': '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update the local recipe model
+      final int index = myRecipes.indexWhere((r) => r.id == recipeId);
+      if (index != -1) {
+        myRecipes[index] = myRecipes[index].copyWith(
+          imageUrl: '',
+          updatedAt: DateTime.now(),
+        );
+        applyFilters();
+      }
+
+      Get.back(); // Close loading dialog
+
+      Get.snackbar(
+        'Success',
+        'Thumbnail removed successfully! 🗑️',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      );
+    } catch (e) {
+      Get.back(); // Close loading dialog if open
+
+      print('Error removing thumbnail: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to remove thumbnail: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(16),
+      );
     }
   }
 

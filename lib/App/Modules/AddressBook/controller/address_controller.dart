@@ -134,6 +134,16 @@ class AddressController extends GetxController {
       }
     } catch (e) {
       print('Error setting default address: $e');
+      if (Get.isSnackbarOpen == false) {
+        Get.snackbar(
+          'Error',
+          'Failed to update default address',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
+      }
     } finally {
       isSyncing.value = false;
     }
@@ -208,7 +218,10 @@ class AddressController extends GetxController {
 
   // Edit address
   Future<void> editAddress(AddressModel address) async {
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      _showError('Please login to edit address');
+      return;
+    }
 
     isLoading.value = true;
 
@@ -252,60 +265,91 @@ class AddressController extends GetxController {
 
   // Delete address
   Future<void> deleteAddress(String id) async {
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      _showError('Please login to delete address');
+      return;
+    }
 
-    Get.dialog(
-      AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Address'),
-        content: const Text('Are you sure you want to delete this address?'),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              Get.back();
-              isLoading.value = true;
-
-              try {
-                final addressRef = _firestore
-                    .collection('users')
-                    .doc(currentUserId)
-                    .collection('addresses')
-                    .doc(id);
-
-                final addressDoc = await addressRef.get();
-                final wasDefault = addressDoc.data()?['isDefault'] ?? false;
-
-                await addressRef.delete();
-
-                // If deleted address was default, set another as default
-                if (wasDefault && addresses.length > 1) {
-                  final remainingAddresses =
-                      addresses.where((a) => a.id != id).toList();
-                  if (remainingAddresses.isNotEmpty) {
-                    await setDefaultAddress(remainingAddresses.first.id);
-                  }
-                }
-
-                _showSuccess('Address deleted successfully');
-              } catch (e) {
-                print('Error deleting address: $e');
-                _showError('Failed to delete address');
-              } finally {
-                isLoading.value = false;
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+    // Show confirmation dialog first
+    final shouldDelete =
+        await Get.dialog<bool>(
+          AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text('Delete'),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.red,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text('Delete Address'),
+              ],
+            ),
+            content: const Text(
+              'Are you sure you want to delete this address? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Get.back(result: false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Get.back(result: true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ) ??
+        false;
+
+    if (!shouldDelete) return;
+
+    isLoading.value = true;
+
+    try {
+      final addressRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('addresses')
+          .doc(id);
+
+      final addressDoc = await addressRef.get();
+      final wasDefault = addressDoc.data()?['isDefault'] ?? false;
+
+      await addressRef.delete();
+
+      // If deleted address was default, set another as default
+      if (wasDefault && addresses.length > 1) {
+        final remainingAddresses = addresses.where((a) => a.id != id).toList();
+        if (remainingAddresses.isNotEmpty) {
+          await setDefaultAddress(remainingAddresses.first.id);
+        }
+      }
+
+      _showSuccess('Address deleted successfully');
+    } catch (e) {
+      print('Error deleting address: $e');
+      _showError('Failed to delete address');
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   // Helper methods

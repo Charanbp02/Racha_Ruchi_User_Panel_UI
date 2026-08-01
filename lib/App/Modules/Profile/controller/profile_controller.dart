@@ -1,3 +1,4 @@
+// lib/App/Modules/Profile/controller/profile_controller.dart
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
@@ -35,7 +36,6 @@ class ProfileController extends GetxController {
       <Map<String, dynamic>>[
         {'title': 'My Orders', 'icon': Iconsax.shopping_bag},
         {'title': 'My Recipes', 'icon': Iconsax.document},
-        {'title': 'Coupons', 'icon': Iconsax.discount_circle},
         {'title': 'Address Book', 'icon': Iconsax.location},
         {'title': 'Notifications', 'icon': Iconsax.notification},
         {'title': 'Help & Support', 'icon': Iconsax.headphone},
@@ -47,19 +47,16 @@ class ProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-
     _storage = FirebaseStorage.instance;
     fetchUserData();
-
-    listenFollowers(); // ✅ add this
-    listenFollowing(); // ✅ add this
-    listenRecipes(); // ✅ add this
+    listenFollowers();
+    listenFollowing();
+    listenRecipes();
   }
 
   void fetchUserData() async {
     try {
       isLoading.value = true;
-
       final User? currentUser = _auth.currentUser;
 
       if (currentUser != null) {
@@ -68,7 +65,6 @@ class ProfileController extends GetxController {
         userName.value = currentUser.displayName ?? '';
         userImage.value = currentUser.photoURL ?? '';
 
-        // Fetch additional user data from Firestore
         DocumentSnapshot userDoc =
             await _firestore.collection('users').doc(currentUser.uid).get();
 
@@ -100,7 +96,6 @@ class ProfileController extends GetxController {
       final User? currentUser = _auth.currentUser;
       if (currentUser == null) return;
 
-      // Fetch user's recipes count
       QuerySnapshot recipesSnapshot =
           await _firestore
               .collection('recipes')
@@ -108,7 +103,6 @@ class ProfileController extends GetxController {
               .get();
       recipes.value = recipesSnapshot.docs.length.toString();
 
-      // Fetch followers count
       DocumentSnapshot userDoc =
           await _firestore.collection('users').doc(currentUser.uid).get();
 
@@ -159,14 +153,12 @@ class ProfileController extends GetxController {
         .snapshots()
         .listen((snapshot) {
           recipes.value = snapshot.docs.length.toString();
-
           print("Recipes => ${snapshot.docs.length}");
         });
   }
 
   void toggleEditMode() {
     if (isEditing.value) {
-      // Save changes
       saveProfile();
     }
     isEditing.value = !isEditing.value;
@@ -175,15 +167,12 @@ class ProfileController extends GetxController {
   void saveProfile() async {
     try {
       isLoading.value = true;
-
       final User? currentUser = _auth.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      // Update Firebase Auth profile
       await currentUser.updateDisplayName(userName.value);
       await currentUser.reload();
 
-      // Update Firestore
       await _firestore.collection('users').doc(currentUser.uid).set({
         'name': userName.value,
         'email': userEmail.value,
@@ -245,8 +234,6 @@ class ProfileController extends GetxController {
                     userPhone.value = newValue;
                     break;
                 }
-
-                // Save immediately to Firebase
                 saveProfile();
                 Get.back();
               }
@@ -264,11 +251,9 @@ class ProfileController extends GetxController {
   Future<void> updateProfileImage(String imageUrl) async {
     try {
       isLoading.value = true;
-
       final User? currentUser = _auth.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      // Update Firestore with new image URL
       await _firestore.collection('users').doc(currentUser.uid).update({
         'imageUrl': imageUrl,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -303,7 +288,6 @@ class ProfileController extends GetxController {
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
-        // Upload image to Firebase Storage
         String imageUrl = await uploadImageToStorage(image);
         await updateProfileImage(imageUrl);
       }
@@ -325,7 +309,6 @@ class ProfileController extends GetxController {
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
 
       if (image != null) {
-        // Upload image to Firebase Storage
         String imageUrl = await uploadImageToStorage(image);
         await updateProfileImage(imageUrl);
       }
@@ -365,7 +348,6 @@ class ProfileController extends GetxController {
 
     switch (title) {
       case 'My Orders':
-        // This is handled in the view now
         break;
       case 'Logout':
         logout();
@@ -383,14 +365,11 @@ class ProfileController extends GetxController {
   void logout() async {
     try {
       await _auth.signOut();
-      // Clear user data
       userName.value = '';
       userEmail.value = '';
       userPhone.value = '';
       userImage.value = '';
       userId.value = '';
-
-      // Navigate to login screen
       Get.offAllNamed('/login');
     } catch (e) {
       print('Error logging out: $e');
